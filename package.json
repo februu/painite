@@ -38,6 +38,7 @@
 	},
 	"dependencies": {
 		"clsx": "^2.1.1",
+		"daisyui": "^5.5.19",
 		"postgres": "^3.4.9",
 		"tailwind-merge": "^3.5.0"
 	}
