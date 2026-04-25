@@ -1,20 +1,22 @@
 <script>
 	import { resolve } from '$app/paths';
+
+	const username = 'februu';
 </script>
 
-<div class="navbar z-50 bg-base-100 px-8 shadow-sm">
-	<div class="flex-1">
-		<div class="text-xl font-semibold">Painite</div>
+<div class="navbar z-50 justify-between bg-base-100 px-4 shadow-sm">
+	<div>
+		<div class="ml-4 text-xl font-semibold">PurePain</div>
 	</div>
-	<div class="flex gap-2">
-		<input type="text" placeholder="Search" class="input-bordered input mr-4 w-24 md:w-auto" />
+	<div>
+		<input type="text" placeholder="Search" class="input-bordered input w-96" />
+	</div>
+	<div class="flex">
 		<div class="dropdown dropdown-end">
-			<div tabIndex={0} role="button" class="btn avatar btn-circle btn-ghost">
-				<div class="w-10 rounded-full">
-					<img
-						alt=""
-						src="https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp"
-					/>
+			<div tabIndex={0} role="button" class="btn avatar btn-ghost">
+				<p class="mr-2">{username}</p>
+				<div class="w-8 rounded-full">
+					<img alt="" src={`https://ui-avatars.com/api/?name=${username.replaceAll(' ', '+')}`} />
 				</div>
 			</div>
 			<ul

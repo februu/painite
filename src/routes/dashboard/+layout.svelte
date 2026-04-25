@@ -5,9 +5,11 @@
 	let { children } = $props();
 </script>
 
-<div>
+<div class="flex h-screen flex-col">
 	<Navbar />
-	<Sidebar>
-		{@render children()}
-	</Sidebar>
+	<div class="flex min-h-0 flex-1">
+		<Sidebar>
+			{@render children()}
+		</Sidebar>
+	</div>
 </div>
