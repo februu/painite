@@ -9,7 +9,7 @@
 		<div class="ml-4 text-xl font-semibold">PurePain</div>
 	</div>
 	<div>
-		<input type="text" placeholder="Search" class="input-bordered input w-96" />
+		<input type="text" placeholder="Search" class="input w-96" />
 	</div>
 	<div class="flex">
 		<div class="dropdown dropdown-end">
