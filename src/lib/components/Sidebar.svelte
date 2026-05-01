@@ -1,30 +1,38 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import type { Project } from '$lib/server/database';
+	import type { Snippet } from 'svelte';
 
-	let { children } = $props();
+	let { projects, children }: { projects: Project[]; children: Snippet } = $props();
+
+	const activeProjectId = $derived(page.params.id);
 </script>
 
-<aside class="w-64 bg-base-200">
-	<ul class="menu w-full p-4">
+<aside class="flex w-64 flex-col bg-base-200">
+	<ul class="menu flex-1 w-full p-4 overflow-y-auto">
 		<li><p class="menu-title">Projects</p></li>
-		<li>
-			<a class="menu-active" href={resolve('/dashboard')}
-				><div class="flex items-center">
-					<div class="mr-2 h-2 w-2 rounded-full bg-teal-400"></div>
-					<p>Sidebar Item 1</p>
-				</div></a
-			>
-		</li>
-		<li>
-			<a href={resolve('/dashboard')}
-				><div class="flex items-center">
-					<div class="mr-2 h-2 w-2 rounded-full bg-amber-400"></div>
-					<p>Sidebar Item 2</p>
-				</div></a
-			>
-		</li>
+		{#each projects as project (project.id)}
+			<li>
+				<a
+					class:menu-active={activeProjectId === String(project.id)}
+					href="/dashboard/projects/{project.id}"
+				>
+					<div class="flex items-center gap-2 min-w-0">
+						<div
+							class="h-2 w-2 shrink-0 rounded-full"
+							style="background-color: {project.color}"
+						></div>
+						<span class="truncate">{project.name}</span>
+					</div>
+				</a>
+			</li>
+		{:else}
+			<li>
+				<span class="text-base-content/40 text-sm italic">No projects yet</span>
+			</li>
+		{/each}
 	</ul>
 </aside>
-<main class="flex flex-1 items-center justify-center">
+<main class="flex-1 overflow-auto">
 	{@render children()}
 </main>

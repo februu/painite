@@ -68,6 +68,23 @@ CREATE TABLE
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW ()
     );
 
+-- ─── Schema suggestions ───────────────────────────────────────────────────────
+--
+-- 1. Add a `color` column to the `projects` table for label color:
+--    ALTER TABLE projects ADD COLUMN color TEXT NOT NULL DEFAULT '#6366f1';
+--
+-- 2. The current `tasks.assignee_id` supports only one assignee. Replace it with
+--    a dedicated join table to support multiple assignees per task:
+--
+--    CREATE TABLE task_assignees (
+--        task_id  INT NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+--        user_id  INT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+--        PRIMARY KEY (task_id, user_id)
+--    );
+--
+--    After migrating data, drop the `assignee_id` column from `tasks`.
+-- ─────────────────────────────────────────────────────────────────────────────
+
 CREATE TABLE
     task_history (
         id SERIAL PRIMARY KEY,
