@@ -28,9 +28,6 @@
 				class="dropdown-content menu z-1 mt-3 w-52 menu-sm rounded-box bg-base-100 p-2 shadow"
 			>
 				<li class="menu-title">{user.email}</li>
-				{#if user.global_role === 'admin'}
-					<li><span class="badge badge-warning badge-sm">Admin</span></li>
-				{/if}
 				<li>
 					<form method="POST" action="/logout" use:enhance>
 						<button type="submit" class="w-full text-left">Logout</button>

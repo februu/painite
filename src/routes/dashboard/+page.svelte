@@ -21,7 +21,6 @@
 		{ label: 'Slate', value: '#64748b' }
 	];
 
-	let dialogClose = $state<(() => void) | null>(null);
 	let selectedColor = $state('#6366f1');
 	let submitting = $state(false);
 </script>
@@ -73,15 +72,15 @@
 					<input type="text" name="name" placeholder="My project" required />
 				</label>
 
-				<label class="textarea w-full">
-					<span class="label">Description</span>
-					<textarea name="description" placeholder="Optional description" rows="2"></textarea>
-				</label>
+				<fieldset class="fieldset py-0">
+					<legend class="fieldset-legend">Description</legend>
+					<textarea name="description" placeholder="Optional description" rows="2" class="textarea w-full"></textarea>
+				</fieldset>
 
 				<fieldset class="fieldset">
 					<legend class="fieldset-legend">Label color</legend>
 					<div class="flex flex-wrap gap-2">
-						{#each colors as c}
+						{#each colors as c (c.value)}
 							<label class="cursor-pointer">
 								<input
 									type="radio"

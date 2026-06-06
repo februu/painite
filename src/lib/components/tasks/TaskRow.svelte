@@ -47,7 +47,7 @@
 	<td>
 		{#if task.assignees.length > 0}
 			<div class="flex -space-x-2">
-				{#each task.assignees.slice(0, 3) as assignee}
+				{#each task.assignees.slice(0, 3) as assignee (assignee.id)}
 					<img
 						src={`https://ui-avatars.com/api/?name=${assignee.username.replaceAll(' ', '+')}&size=24`}
 						alt={assignee.username}

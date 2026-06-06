@@ -14,6 +14,7 @@ CREATE TABLE
         name TEXT NOT NULL,
         description TEXT,
         status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+        color TEXT NOT NULL DEFAULT '#6366f1',
         created_by INT NOT NULL REFERENCES users (id),
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW ()
     );
@@ -52,7 +53,6 @@ CREATE TABLE
         description TEXT,
         status_id INT REFERENCES custom_statuses (id) ON DELETE SET NULL,
         priority_id INT REFERENCES custom_priorities (id) ON DELETE SET NULL,
-        assignee_id INT REFERENCES users (id) ON DELETE SET NULL,
         reporter_id INT NOT NULL REFERENCES users (id),
         due_date TIMESTAMPTZ,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW (),
@@ -68,22 +68,22 @@ CREATE TABLE
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW ()
     );
 
--- ─── Schema suggestions ───────────────────────────────────────────────────────
---
--- 1. Add a `color` column to the `projects` table for label color:
---    ALTER TABLE projects ADD COLUMN color TEXT NOT NULL DEFAULT '#6366f1';
---
--- 2. The current `tasks.assignee_id` supports only one assignee. Replace it with
---    a dedicated join table to support multiple assignees per task:
---
---    CREATE TABLE task_assignees (
---        task_id  INT NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
---        user_id  INT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
---        PRIMARY KEY (task_id, user_id)
---    );
---
---    After migrating data, drop the `assignee_id` column from `tasks`.
--- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE
+    task_assignees (
+        task_id INT NOT NULL REFERENCES tasks (id) ON DELETE CASCADE,
+        user_id INT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        PRIMARY KEY (task_id, user_id)
+    );
+
+CREATE TABLE
+    sessions (
+        token      TEXT        PRIMARY KEY,
+        user_id    INT         NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW ()
+    );
+CREATE INDEX ON sessions (user_id);
+
 
 CREATE TABLE
     task_history (

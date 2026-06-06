@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import StatusManager from '$lib/components/settings/StatusManager.svelte';
 	import PriorityManager from '$lib/components/settings/PriorityManager.svelte';
@@ -25,7 +26,7 @@
 		{ label: 'Slate', value: '#64748b' }
 	];
 
-	let selectedColor = $state(data.project.color);
+	let selectedColor = $state(untrack(() => project.color));
 </script>
 
 <div class="mx-auto max-w-2xl p-6">
@@ -33,7 +34,7 @@
 
 	<!-- Tabs -->
 	<div role="tablist" class="tabs tabs-bordered mb-6">
-		{#each (['general', 'statuses', 'priorities', 'members'] as const) as tab}
+		{#each (['general', 'statuses', 'priorities', 'members'] as const) as tab (tab)}
 			<button
 				role="tab"
 				class="tab capitalize"
@@ -71,18 +72,15 @@
 						/>
 					</label>
 
-					<label class="textarea w-full">
-						<span class="label">Description</span>
-						<textarea
-							name="description"
-							rows="3"
-						>{project.description ?? ''}</textarea>
-					</label>
+					<fieldset class="fieldset py-0">
+						<legend class="fieldset-legend">Description</legend>
+						<textarea name="description" rows="3" class="textarea w-full">{project.description ?? ''}</textarea>
+					</fieldset>
 
 					<fieldset class="fieldset">
 						<legend class="fieldset-legend">Label color</legend>
 						<div class="flex flex-wrap gap-2">
-							{#each colors as c}
+							{#each colors as c (c.value)}
 								<label class="cursor-pointer">
 									<input
 										type="radio"

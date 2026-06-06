@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { enhance } from '$app/forms';
 	import type { PageData, ActionData } from './$types';
 
-	let { data, form }: { data: PageData; form: ActionData } = $props();
+	let { data, form: _form }: { data: PageData; form: ActionData } = $props();
 
 	const { task, comments, history } = $derived(data);
 	const { project, statuses, priorities, members, userRole, user } = $derived(data);
@@ -12,10 +13,9 @@
 
 	let editingTitle = $state(false);
 	let editingDescription = $state(false);
-	let titleValue = $state(data.task.title);
-	let descValue = $state(data.task.description ?? '');
+	let titleValue = $state(untrack(() => task.title));
+	let descValue = $state(untrack(() => task.description ?? ''));
 	let showHistory = $state(false);
-	let userQuery = $state('');
 	let submitting = $state(false);
 
 	function formatDate(dateStr: string | null | undefined) {
@@ -324,7 +324,7 @@
 								onchange={(e) => e.currentTarget.form?.requestSubmit()}
 							>
 								<option value="">None</option>
-								{#each statuses as s}
+								{#each statuses as s (s.id)}
 									<option value={s.id} selected={task.status?.id === s.id}>
 										{s.name}
 									</option>
@@ -368,7 +368,7 @@
 								onchange={(e) => e.currentTarget.form?.requestSubmit()}
 							>
 								<option value="">None</option>
-								{#each priorities as p}
+								{#each priorities as p (p.id)}
 									<option value={p.id} selected={task.priority?.id === p.id}>
 										{p.name}
 									</option>
@@ -464,14 +464,13 @@
 							use:enhance={() => {
 								return async ({ update }) => {
 									await update({ reset: true });
-									userQuery = '';
 								};
 							}}
 							class="flex gap-1 pt-1"
 						>
 							<select name="userId" class="select select-xs flex-1">
 								<option value="">Add member…</option>
-								{#each members as m}
+								{#each members as m (m.user_id)}
 									{#if !task.assignees.some((a) => a.id === m.user.id)}
 										<option value={m.user.id}>{m.user.username}</option>
 									{/if}

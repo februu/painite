@@ -14,6 +14,7 @@
 	let priorityFilter = $state(page.url.searchParams.get('priority') ?? '');
 
 	function applyFilters() {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity
 		const params = new URLSearchParams();
 		if (searchValue) params.set('q', searchValue);
 		if (statusFilter) params.set('status', statusFilter);
@@ -44,14 +45,14 @@
 
 		<select class="select select-sm" bind:value={statusFilter} onchange={applyFilters}>
 			<option value="">All statuses</option>
-			{#each data.statuses as s}
+			{#each data.statuses as s (s.id)}
 				<option value={s.id}>{s.name}</option>
 			{/each}
 		</select>
 
 		<select class="select select-sm" bind:value={priorityFilter} onchange={applyFilters}>
 			<option value="">All priorities</option>
-			{#each data.priorities as p}
+			{#each data.priorities as p (p.id)}
 				<option value={p.id}>{p.name}</option>
 			{/each}
 		</select>

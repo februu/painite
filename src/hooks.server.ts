@@ -1,4 +1,4 @@
-import { getSessionUser } from '$lib/server/database';
+// import { getSessionUser } from '$lib/server/database'; // TODO: re-enable when auth is wired up
 import type { Handle } from '@sveltejs/kit';
 
 // TODO: remove this once DB auth is wired up
