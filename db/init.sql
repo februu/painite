@@ -1,3 +1,5 @@
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE
     users (
         id SERIAL PRIMARY KEY,
@@ -95,3 +97,81 @@ CREATE TABLE
         new_value TEXT,
         changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW ()
     );
+
+-- ─── Seed data ────────────────────────────────────────────────────────────────
+
+INSERT INTO users (id, email, password_hash, username, global_role, created_at) VALUES
+    (1, 'dev@example.com',     crypt('password123', gen_salt('bf')), 'devuser', 'admin', '2025-01-01T00:00:00Z'),
+    (2, 'alice@example.com',   crypt('password123', gen_salt('bf')), 'Alice',   'user',  '2025-01-02T00:00:00Z'),
+    (3, 'bob@example.com',     crypt('password123', gen_salt('bf')), 'Bob',     'user',  '2025-01-03T00:00:00Z'),
+    (4, 'charlie@example.com', crypt('password123', gen_salt('bf')), 'Charlie', 'user',  '2025-01-04T00:00:00Z');
+SELECT setval('users_id_seq', (SELECT MAX(id) FROM users));
+
+INSERT INTO projects (id, name, description, status, color, created_by, created_at) VALUES
+    (1, 'Frontend Redesign', 'Overhaul of the public-facing UI using Svelte and Tailwind.', 'active',   '#6366f1', 1, '2025-02-01T00:00:00Z'),
+    (2, 'API Development',   'REST API for the new mobile clients.',                        'active',   '#14b8a6', 2, '2025-02-10T00:00:00Z'),
+    (3, 'Mobile App',        NULL,                                                          'archived', '#ef4444', 1, '2024-11-01T00:00:00Z');
+SELECT setval('projects_id_seq', (SELECT MAX(id) FROM projects));
+
+INSERT INTO project_members (project_id, user_id, role) VALUES
+    (1, 1, 'owner'),
+    (1, 2, 'member'),
+    (1, 3, 'viewer'),
+    (2, 2, 'owner'),
+    (2, 1, 'member'),
+    (2, 4, 'member'),
+    (3, 1, 'owner');
+
+INSERT INTO custom_statuses (id, project_id, name, color, sort_order) VALUES
+    (1, 1, 'To Do',       '#94a3b8', 0),
+    (2, 1, 'In Progress', '#3b82f6', 1),
+    (3, 1, 'Review',      '#f59e0b', 2),
+    (4, 1, 'Done',        '#22c55e', 3),
+    (5, 2, 'Backlog',     '#94a3b8', 0),
+    (6, 2, 'In Progress', '#3b82f6', 1),
+    (7, 2, 'Done',        '#22c55e', 2);
+SELECT setval('custom_statuses_id_seq', (SELECT MAX(id) FROM custom_statuses));
+
+INSERT INTO custom_priorities (id, project_id, name, color, sort_order) VALUES
+    (1, 1, 'Low',      '#94a3b8', 0),
+    (2, 1, 'Medium',   '#f59e0b', 1),
+    (3, 1, 'High',     '#ef4444', 2),
+    (4, 1, 'Critical', '#7c3aed', 3),
+    (5, 2, 'Low',      '#94a3b8', 0),
+    (6, 2, 'High',     '#ef4444', 1);
+SELECT setval('custom_priorities_id_seq', (SELECT MAX(id) FROM custom_priorities));
+
+INSERT INTO tasks (id, project_id, title, description, status_id, priority_id, reporter_id, due_date, created_at, updated_at) VALUES
+    (1, 1, 'Set up Tailwind config',              'Configure Tailwind CSS with the DaisyUI plugin and custom theme tokens.',                           4, 1, 1, '2025-03-01T00:00:00Z', '2025-02-02T09:00:00Z', '2025-02-10T14:00:00Z'),
+    (2, 1, 'Design landing page',                 'Create high-fidelity mockups for the new landing page. Coordinate with the marketing team on copy.', 2, 3, 1, '2025-05-15T00:00:00Z', '2025-02-03T10:00:00Z', '2025-04-20T11:00:00Z'),
+    (3, 1, 'Build navigation component',          NULL,                                                                                                 1, 2, 2, NULL,                   '2025-02-05T08:00:00Z', '2025-02-05T08:00:00Z'),
+    (4, 1, 'Fix mobile responsiveness',           'Several components break on screens narrower than 375px. Audit and fix all breakpoint issues.',      3, 4, 2, '2025-04-28T00:00:00Z', '2025-03-10T12:00:00Z', '2025-04-25T09:30:00Z'),
+    (5, 1, 'Write unit tests for form validation',NULL,                                                                                                 1, 1, 1, '2025-03-20T00:00:00Z', '2025-03-01T00:00:00Z', '2025-03-01T00:00:00Z'),
+    (6, 2, 'Define OpenAPI schema',               'Write the full OpenAPI 3.1 spec for all planned endpoints before implementation starts.',            7, 6, 2, '2025-04-01T00:00:00Z', '2025-02-12T10:00:00Z', '2025-04-01T16:00:00Z'),
+    (7, 2, 'Implement auth endpoints',            'POST /auth/login, POST /auth/logout, POST /auth/refresh.',                                          6, 6, 2, '2025-05-10T00:00:00Z', '2025-02-15T09:00:00Z', '2025-04-22T13:00:00Z');
+SELECT setval('tasks_id_seq', (SELECT MAX(id) FROM tasks));
+
+INSERT INTO task_assignees (task_id, user_id) VALUES
+    (1, 1),
+    (2, 2),
+    (4, 1),
+    (4, 3),
+    (6, 2),
+    (7, 4);
+
+INSERT INTO comments (id, task_id, author_id, content, created_at) VALUES
+    (1, 2, 1, 'Marketing sent over the new brand guidelines yesterday — make sure the palette matches.',  '2025-04-18T10:30:00Z'),
+    (2, 2, 2, 'On it. I''ll have a first draft ready by Friday.',                                        '2025-04-18T11:05:00Z'),
+    (3, 4, 2, 'Reproduced on iPhone 12 mini. The navbar overlaps the hero section below 375px.',         '2025-04-24T09:00:00Z'),
+    (4, 4, 1, 'I''ll tackle the navbar first and then do a full audit of the card components.',          '2025-04-25T09:32:00Z'),
+    (5, 7, 4, 'Should refresh tokens be stored in httpOnly cookies or returned in the response body?',   '2025-04-20T14:00:00Z'),
+    (6, 7, 2, 'httpOnly cookies — avoids XSS risk. I''ll update the spec.',                              '2025-04-20T14:45:00Z');
+SELECT setval('comments_id_seq', (SELECT MAX(id) FROM comments));
+
+INSERT INTO task_history (id, task_id, changed_by, field, old_value, new_value, changed_at) VALUES
+    (1, 2, 1, 'status',   'To Do',       'In Progress', '2025-04-10T09:00:00Z'),
+    (2, 2, 2, 'priority', 'Medium',      'High',        '2025-04-15T11:00:00Z'),
+    (3, 4, 2, 'status',   'In Progress', 'Review',      '2025-04-25T09:30:00Z'),
+    (4, 4, 1, 'priority', 'High',        'Critical',    '2025-04-23T08:00:00Z'),
+    (5, 1, 1, 'status',   'In Progress', 'Done',        '2025-02-10T14:00:00Z');
+SELECT setval('task_history_id_seq', (SELECT MAX(id) FROM task_history));
