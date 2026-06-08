@@ -1,6 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
 import {
 	updateProject,
+	deleteProject,
 	createStatus,
 	updateStatus,
 	deleteStatus,
@@ -21,6 +22,12 @@ export const load: PageServerLoad = async ({ parent }) => {
 };
 
 export const actions: Actions = {
+	deleteProject: async ({ params, locals }) => {
+		if (!locals.user) redirect(302, '/login');
+		await deleteProject(Number(params.id));
+		redirect(302, '/dashboard');
+	},
+
 	updateProject: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
 		const data = await request.formData();

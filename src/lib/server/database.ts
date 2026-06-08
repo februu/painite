@@ -85,6 +85,15 @@ export type TaskHistory = {
 
 // ─── Auth / Sessions ──────────────────────────────────────────────────────────
 
+export async function createUser(email: string, password: string, username: string): Promise<User> {
+	const [user] = await sql<User[]>`
+		INSERT INTO users (email, password_hash, username)
+		VALUES (${email}, crypt(${password}, gen_salt('bf')), ${username})
+		RETURNING id, email, username, global_role, created_at
+	`;
+	return user;
+}
+
 export async function getUserByCredentials(email: string, password: string): Promise<User | null> {
 	const [user] = await sql<User[]>`
 		SELECT id, email, username, global_role, created_at
@@ -170,6 +179,7 @@ export async function createProject(data: {
 		VALUES (${data.name}, ${data.description ?? null}, ${data.color}, ${data.createdBy})
 		RETURNING *
 	`;
+	await addProjectMember(project.id, data.createdBy, 'owner');
 	return project;
 }
 
@@ -443,6 +453,45 @@ export async function deleteTask(taskId: number): Promise<void> {
 	await sql`DELETE FROM tasks WHERE id = ${taskId}`;
 }
 
+export async function deleteProject(projectId: number): Promise<void> {
+	await sql`DELETE FROM projects WHERE id = ${projectId}`;
+}
+
+export type TaskSearchResult = {
+	id: number;
+	title: string;
+	description: string | null;
+	project_id: number;
+	project_name: string;
+};
+
+export async function searchTasksGlobal(
+	userId: number,
+	query: string,
+	isAdmin: boolean
+): Promise<TaskSearchResult[]> {
+	const q = `%${query}%`;
+	if (isAdmin) {
+		return sql<TaskSearchResult[]>`
+			SELECT t.id, t.title, t.description, p.id AS project_id, p.name AS project_name
+			FROM tasks t
+			JOIN projects p ON p.id = t.project_id
+			WHERE t.title ILIKE ${q} OR t.description ILIKE ${q}
+			ORDER BY t.updated_at DESC
+			LIMIT 15
+		`;
+	}
+	return sql<TaskSearchResult[]>`
+		SELECT t.id, t.title, t.description, p.id AS project_id, p.name AS project_name
+		FROM tasks t
+		JOIN projects p ON p.id = t.project_id
+		JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = ${userId}
+		WHERE t.title ILIKE ${q} OR t.description ILIKE ${q}
+		ORDER BY t.updated_at DESC
+		LIMIT 15
+	`;
+}
+
 // ─── Task Assignees ───────────────────────────────────────────────────────────
 
 export async function getTaskAssignees(taskId: number): Promise<User[]> {
@@ -506,6 +555,35 @@ export async function getTaskHistory(taskId: number): Promise<TaskHistory[]> {
 		FROM task_history th
 		JOIN users u ON u.id = th.changed_by
 		WHERE th.task_id = ${taskId}
-		ORDER BY th.changed_at ASC
+		ORDER BY th.changed_at DESC
 	`;
+}
+
+export async function addTaskHistory(
+	taskId: number,
+	userId: number,
+	field: string,
+	oldValue: string | null,
+	newValue: string | null
+): Promise<void> {
+	await sql`
+		INSERT INTO task_history (task_id, changed_by, field, old_value, new_value)
+		VALUES (${taskId}, ${userId}, ${field}, ${oldValue}, ${newValue})
+	`;
+}
+
+export async function isTaskAssignee(taskId: number, userId: number): Promise<boolean> {
+	const [row] = await sql`
+		SELECT 1 FROM task_assignees WHERE task_id = ${taskId} AND user_id = ${userId}
+	`;
+	return !!row;
+}
+
+export async function getCommentById(
+	commentId: number
+): Promise<{ id: number; author_id: number; task_id: number } | null> {
+	const [row] = await sql<[{ id: number; author_id: number; task_id: number }]>`
+		SELECT id, author_id, task_id FROM comments WHERE id = ${commentId}
+	`;
+	return row ?? null;
 }

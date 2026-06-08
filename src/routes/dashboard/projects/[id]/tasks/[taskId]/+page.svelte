@@ -62,6 +62,7 @@
 								await update();
 								submitting = false;
 								editingTitle = false;
+								titleValue = task.title;
 							};
 						}}
 						class="flex gap-2"
@@ -87,7 +88,7 @@
 						<input
 							type="hidden"
 							name="dueDate"
-							value={task.due_date ?? ''}
+							value={task.due_date ? new Date(task.due_date).toISOString().slice(0, 10) : ''}
 						/>
 						<button type="submit" class="btn btn-success btn-sm" disabled={submitting}>
 							Save
@@ -146,6 +147,7 @@
 									await update();
 									submitting = false;
 									editingDescription = false;
+									descValue = task.description ?? '';
 								};
 							}}
 							class="flex flex-col gap-2"
@@ -170,7 +172,7 @@
 							<input
 								type="hidden"
 								name="dueDate"
-								value={task.due_date ?? ''}
+								value={task.due_date ? new Date(task.due_date).toISOString().slice(0, 10) : ''}
 							/>
 							<div class="flex gap-2">
 								<button type="submit" class="btn btn-success btn-sm" disabled={submitting}>
@@ -279,16 +281,24 @@
 
 					{#if showHistory}
 						{#each history as entry (entry.id)}
-							<div class="text-base-content/60 flex gap-2 text-xs">
-								<span class="font-medium">{entry.changed_by.username}</span>
-								<span>changed <strong>{entry.field}</strong></span>
-								{#if entry.old_value}
-									<span>from <em>{entry.old_value}</em></span>
-								{/if}
-								{#if entry.new_value}
-									<span>to <em>{entry.new_value}</em></span>
-								{/if}
-								<span class="ml-auto">{formatDateTime(entry.changed_at)}</span>
+							<div class="text-base-content/60 flex items-start justify-between gap-4 text-xs">
+								<span>
+									<span class="text-base-content/80 font-medium">{entry.changed_by.username}</span>
+									{#if entry.field === 'created'}
+										 created this task
+									{:else if entry.field === 'assignee_added'}
+										 assigned <em>{entry.new_value}</em>
+									{:else if entry.field === 'assignee_removed'}
+										 removed assignee <em>{entry.old_value}</em>
+									{:else if entry.old_value && entry.new_value}
+										 changed <strong>{entry.field.replace('_', ' ')}</strong> from <em>{entry.old_value}</em> to <em>{entry.new_value}</em>
+									{:else if entry.new_value}
+										 set <strong>{entry.field.replace('_', ' ')}</strong> to <em>{entry.new_value}</em>
+									{:else}
+										 cleared <strong>{entry.field.replace('_', ' ')}</strong>
+									{/if}
+								</span>
+								<span class="shrink-0">{formatDateTime(entry.changed_at)}</span>
 							</div>
 						{:else}
 							<p class="text-base-content/40 text-xs italic">No activity yet</p>
@@ -316,7 +326,7 @@
 							<input
 								type="hidden"
 								name="dueDate"
-								value={task.due_date ?? ''}
+								value={task.due_date ? new Date(task.due_date).toISOString().slice(0, 10) : ''}
 							/>
 							<select
 								name="statusId"
@@ -360,7 +370,7 @@
 							<input
 								type="hidden"
 								name="dueDate"
-								value={task.due_date ?? ''}
+								value={task.due_date ? new Date(task.due_date).toISOString().slice(0, 10) : ''}
 							/>
 							<select
 								name="priorityId"
@@ -410,7 +420,7 @@
 								type="date"
 								name="dueDate"
 								class="input input-sm w-full"
-								value={task.due_date ? task.due_date.slice(0, 10) : ''}
+								value={task.due_date ? new Date(task.due_date).toISOString().slice(0, 10) : ''}
 								onchange={(e) => e.currentTarget.form?.requestSubmit()}
 							/>
 						</form>
@@ -449,7 +459,7 @@
 						<p class="text-base-content/40 text-sm italic">None assigned</p>
 					{/each}
 
-					{#if !isAssignee}
+					{#if !isAssignee && userRole !== 'viewer'}
 						<form method="POST" action="?/assignSelf" use:enhance>
 							<button type="submit" class="btn btn-ghost btn-xs w-full">
 								Assign myself
@@ -489,9 +499,8 @@
 						<form
 							method="POST"
 							action="?/deleteTask"
-							use:enhance
-							onsubmit={(e) => {
-								if (!confirm('Delete this task? This cannot be undone.')) e.preventDefault();
+							use:enhance={({ cancel }) => {
+								if (!confirm('Delete this task? This cannot be undone.')) cancel();
 							}}
 						>
 							<button type="submit" class="btn btn-error btn-sm w-full">

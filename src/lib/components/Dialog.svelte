@@ -1,9 +1,14 @@
-<script>
-	/** @type {{ title?: string, children?: import('svelte').Snippet, trigger?: import('svelte').Snippet<[{ open: () => void }]>, actions?: import('svelte').Snippet<[{ close: () => void }]> }} */
-	let { title, children, trigger, actions } = $props();
+<script lang="ts">
+	import type { Snippet } from 'svelte';
 
-	/** @type {HTMLDialogElement | undefined} */
-	let dialog = $state();
+	let { title, children, trigger, actions }: {
+		title?: string;
+		children?: Snippet<[{ close: () => void }]>;
+		trigger?: Snippet<[{ open: () => void }]>;
+		actions?: Snippet<[{ close: () => void }]>;
+	} = $props();
+
+	let dialog = $state<HTMLDialogElement>();
 
 	function open() {
 		dialog?.showModal();
@@ -22,7 +27,7 @@
 			<h3 class="mb-4 text-lg font-bold">{title}</h3>
 		{/if}
 
-		{@render children?.()}
+		{@render children?.({ close })}
 
 		<div class="modal-action">
 			{#if actions}

@@ -22,6 +22,6 @@ export const actions: Actions = {
 			createdBy: locals.user.id
 		});
 
-		redirect(302, `/dashboard/projects/${project.id}`);
+		return { success: true, projectId: project.id };
 	}
 };

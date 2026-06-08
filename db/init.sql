@@ -101,10 +101,10 @@ CREATE TABLE
 -- ─── Seed data ────────────────────────────────────────────────────────────────
 
 INSERT INTO users (id, email, password_hash, username, global_role, created_at) VALUES
-    (1, 'dev@example.com',     crypt('password123', gen_salt('bf')), 'devuser', 'admin', '2025-01-01T00:00:00Z'),
-    (2, 'alice@example.com',   crypt('password123', gen_salt('bf')), 'Alice',   'user',  '2025-01-02T00:00:00Z'),
-    (3, 'bob@example.com',     crypt('password123', gen_salt('bf')), 'Bob',     'user',  '2025-01-03T00:00:00Z'),
-    (4, 'charlie@example.com', crypt('password123', gen_salt('bf')), 'Charlie', 'user',  '2025-01-04T00:00:00Z');
+    (1, 'admin@test.com',     crypt('test', gen_salt('bf')), 'devuser', 'admin', '2025-01-01T00:00:00Z'),
+    (2, 'test@test.com',   crypt('test', gen_salt('bf')), 'Testowy',   'user',  '2025-01-02T00:00:00Z'),
+    (3, 'kowalski@test.com',     crypt('test', gen_salt('bf')), 'Jan Kowalski',     'user',  '2025-01-03T00:00:00Z'),
+    (4, 'nowak@test.com', crypt('test', gen_salt('bf')), 'Anna Nowak', 'user',  '2025-01-04T00:00:00Z');
 SELECT setval('users_id_seq', (SELECT MAX(id) FROM users));
 
 INSERT INTO projects (id, name, description, status, color, created_by, created_at) VALUES

@@ -62,6 +62,11 @@
 					Sign in
 				</button>
 			</form>
+
+			<p class="text-base-content/60 text-center text-sm">
+				Don't have an account?
+				<a href="/register" class="link link-primary">Register</a>
+			</p>
 		</div>
 	</div>
 </div>

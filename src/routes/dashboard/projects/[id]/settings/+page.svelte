@@ -59,7 +59,11 @@
 				<form
 					method="POST"
 					action="?/updateProject"
-					use:enhance
+					use:enhance={() => {
+						return async ({ update }) => {
+							await update({ reset: false });
+						};
+					}}
 					class="flex flex-col gap-4"
 				>
 					<label class="input w-full">
@@ -116,6 +120,24 @@
 						<button type="submit" class="btn btn-primary btn-sm">Save changes</button>
 					</div>
 				</form>
+
+				<div class="divider"></div>
+
+				<div class="flex items-center justify-between">
+					<div>
+						<p class="font-semibold text-error">Delete project</p>
+						<p class="text-base-content/60 text-sm">This is permanent and cannot be undone.</p>
+					</div>
+					<form
+						method="POST"
+						action="?/deleteProject"
+						use:enhance={({ cancel }) => {
+							if (!confirm(`Delete "${project.name}"? This cannot be undone.`)) cancel();
+						}}
+					>
+						<button type="submit" class="btn btn-error btn-sm">Delete Project</button>
+					</form>
+				</div>
 			</div>
 		</div>
 	{/if}

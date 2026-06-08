@@ -1,5 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { createTask, getProjectTasks } from '$lib/server/database';
+import { addTaskHistory, createTask, getProjectById, getProjectTasks, getUserProjectRole } from '$lib/server/database';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, url }) => {
@@ -23,6 +23,18 @@ export const actions: Actions = {
 		if (!locals.user) redirect(302, '/login');
 
 		const projectId = Number(params.id);
+
+		const project = await getProjectById(projectId);
+		if (project?.status === 'archived') return fail(403, { error: 'This project is archived' });
+
+		const role =
+			locals.user.global_role === 'admin'
+				? 'owner'
+				: await getUserProjectRole(projectId, locals.user.id);
+		if (!role || role === 'viewer') {
+			return fail(403, { error: 'Only members and owners can create tasks' });
+		}
+
 		const data = await request.formData();
 		const title = String(data.get('title') ?? '').trim();
 		const description = String(data.get('description') ?? '').trim();
@@ -34,7 +46,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Task title is required' });
 		}
 
-		await createTask({
+		const task = await createTask({
 			projectId,
 			title,
 			description: description || undefined,
@@ -43,6 +55,8 @@ export const actions: Actions = {
 			reporterId: locals.user.id,
 			dueDate: dueDate || undefined
 		});
+
+		await addTaskHistory(task.id, locals.user.id, 'created', null, null);
 
 		return { success: true };
 	}

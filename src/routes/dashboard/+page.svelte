@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { enhance } from '$app/forms';
 	import Dialog from '$lib/components/Dialog.svelte';
 	import type { ActionData } from './$types';
@@ -41,67 +42,68 @@
 				<button class="btn btn-primary" onclick={open}>Create Project</button>
 			{/snippet}
 
-			{#snippet actions({ close })}
-				<button
-					type="submit"
-					form="create-project-form"
-					class="btn btn-success"
-					disabled={submitting}
+			{#snippet actions()}{/snippet}
+
+			{#snippet children({ close })}
+				<form
+					method="POST"
+					action="?/createProject"
+					use:enhance={() => {
+						submitting = true;
+						return async ({ result }) => {
+							submitting = false;
+							if (result.type === 'success' && result.data?.projectId) {
+								close();
+								await goto(`/dashboard/projects/${result.data.projectId}`);
+							}
+						};
+					}}
+					class="flex flex-col gap-3"
 				>
-					{#if submitting}<span class="loading loading-spinner loading-sm"></span>{/if}
-					Create
-				</button>
-				<button type="button" class="btn" onclick={close}>Cancel</button>
-			{/snippet}
+					<label class="input w-full">
+						<span class="label">Project name</span>
+						<input type="text" name="name" placeholder="My project" required />
+					</label>
 
-			<form
-				id="create-project-form"
-				method="POST"
-				action="?/createProject"
-				use:enhance={() => {
-					submitting = true;
-					return async ({ update }) => {
-						await update();
-						submitting = false;
-					};
-				}}
-				class="flex flex-col gap-3"
-			>
-				<label class="input w-full">
-					<span class="label">Project name</span>
-					<input type="text" name="name" placeholder="My project" required />
-				</label>
+					<fieldset class="fieldset py-0">
+						<legend class="fieldset-legend">Description</legend>
+						<textarea name="description" placeholder="Optional description" rows="2" class="textarea w-full"></textarea>
+					</fieldset>
 
-				<fieldset class="fieldset py-0">
-					<legend class="fieldset-legend">Description</legend>
-					<textarea name="description" placeholder="Optional description" rows="2" class="textarea w-full"></textarea>
-				</fieldset>
+					<fieldset class="fieldset">
+						<legend class="fieldset-legend">Label color</legend>
+						<div class="flex flex-wrap gap-2">
+							{#each colors as c (c.value)}
+								<label class="cursor-pointer">
+									<input
+										type="radio"
+										name="color"
+										value={c.value}
+										class="sr-only"
+										checked={selectedColor === c.value}
+										onchange={() => (selectedColor = c.value)}
+									/>
+									<div
+										class="h-6 w-6 rounded-full ring-offset-2 transition-all"
+										class:ring-2={selectedColor === c.value}
+										class:ring-base-content={selectedColor === c.value}
+										style="background-color: {c.value}"
+										title={c.label}
+									></div>
+								</label>
+							{/each}
+						</div>
+					</fieldset>
 
-				<fieldset class="fieldset">
-					<legend class="fieldset-legend">Label color</legend>
-					<div class="flex flex-wrap gap-2">
-						{#each colors as c (c.value)}
-							<label class="cursor-pointer">
-								<input
-									type="radio"
-									name="color"
-									value={c.value}
-									class="sr-only"
-									checked={selectedColor === c.value}
-									onchange={() => (selectedColor = c.value)}
-								/>
-								<div
-									class="h-6 w-6 rounded-full ring-offset-2 transition-all"
-									class:ring-2={selectedColor === c.value}
-									class:ring-base-content={selectedColor === c.value}
-									style="background-color: {c.value}"
-									title={c.label}
-								></div>
-							</label>
-						{/each}
+					<div class="modal-action mt-0 pt-4">
+						<button type="submit" class="btn btn-success" disabled={submitting}>
+							{#if submitting}<span class="loading loading-spinner loading-sm"></span>{/if}
+							Create
+						</button>
+						<button type="button" class="btn" onclick={close}>Cancel</button>
 					</div>
-				</fieldset>
-			</form>
+				</form>
+			{/snippet}
 		</Dialog>
 	</div>
 </div>
