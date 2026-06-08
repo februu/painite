@@ -11,7 +11,7 @@ import type { LayoutServerLoad } from './$types';
 export const load: LayoutServerLoad = async ({ params, locals }) => {
 	if (!locals.user) redirect(302, '/login');
 
-	const projectId = Number(params.id);
+	const projectId = params.id;
 	const project = await getProjectById(projectId);
 
 	if (!project) error(404, 'Project not found');

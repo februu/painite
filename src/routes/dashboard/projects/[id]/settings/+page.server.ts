@@ -11,9 +11,16 @@ import {
 	addProjectMember,
 	updateProjectMemberRole,
 	removeProjectMember,
-	searchUsers
+	searchUsers,
+	getProjectById
 } from '$lib/server/database';
 import type { Actions, PageServerLoad } from './$types';
+
+async function assertNotArchived(projectId: string) {
+	const project = await getProjectById(projectId);
+	if (project?.status === 'archived') return fail(403, { error: 'This project is archived' });
+	return null;
+}
 
 export const load: PageServerLoad = async ({ parent }) => {
 	const { userRole } = await parent();
@@ -24,7 +31,7 @@ export const load: PageServerLoad = async ({ parent }) => {
 export const actions: Actions = {
 	deleteProject: async ({ params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
-		await deleteProject(Number(params.id));
+		await deleteProject(params.id);
 		redirect(302, '/dashboard');
 	},
 
@@ -38,12 +45,14 @@ export const actions: Actions = {
 
 		if (!name) return fail(400, { error: 'Project name is required' });
 
-		await updateProject(Number(params.id), { name, description, color, status: status ?? undefined });
+		await updateProject(params.id, { name, description, color, status: status ?? undefined });
 		return { success: true };
 	},
 
 	createStatus: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(params.id);
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '').trim();
 		const color = String(data.get('color') ?? '#6366f1');
@@ -51,31 +60,37 @@ export const actions: Actions = {
 		if (!name) return fail(400, { statusError: 'Status name is required' });
 
 		const existingCount = Number(data.get('existingCount') ?? 0);
-		await createStatus(Number(params.id), { name, color, sort_order: existingCount });
+		await createStatus(params.id, { name, color, sort_order: existingCount });
 		return { success: true };
 	},
 
-	updateStatus: async ({ request, locals }) => {
+	updateStatus: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(params.id);
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
-		const id = Number(data.get('id'));
+		const statusId = String(data.get('id') ?? '');
 		const name = String(data.get('name') ?? '').trim();
 		const color = String(data.get('color') ?? '');
 
 		if (!name) return fail(400, { statusError: 'Name required' });
-		await updateStatus(id, { name, color });
+		await updateStatus(params.id, statusId, { name, color });
 		return { success: true };
 	},
 
-	deleteStatus: async ({ request, locals }) => {
+	deleteStatus: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(params.id);
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
-		await deleteStatus(Number(data.get('id')));
+		await deleteStatus(params.id, String(data.get('id') ?? ''));
 		return { success: true };
 	},
 
 	createPriority: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(params.id);
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '').trim();
 		const color = String(data.get('color') ?? '#6366f1');
@@ -83,56 +98,66 @@ export const actions: Actions = {
 		if (!name) return fail(400, { priorityError: 'Priority name is required' });
 
 		const existingCount = Number(data.get('existingCount') ?? 0);
-		await createPriority(Number(params.id), { name, color, sort_order: existingCount });
+		await createPriority(params.id, { name, color, sort_order: existingCount });
 		return { success: true };
 	},
 
-	updatePriority: async ({ request, locals }) => {
+	updatePriority: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(params.id);
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
-		const id = Number(data.get('id'));
+		const priorityId = String(data.get('id') ?? '');
 		const name = String(data.get('name') ?? '').trim();
 		const color = String(data.get('color') ?? '');
 
 		if (!name) return fail(400, { priorityError: 'Name required' });
-		await updatePriority(id, { name, color });
+		await updatePriority(params.id, priorityId, { name, color });
 		return { success: true };
 	},
 
-	deletePriority: async ({ request, locals }) => {
+	deletePriority: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(params.id);
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
-		await deletePriority(Number(data.get('id')));
+		await deletePriority(params.id, String(data.get('id') ?? ''));
 		return { success: true };
 	},
 
 	inviteMember: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(params.id);
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
-		const userId = Number(data.get('userId'));
+		const userId = String(data.get('userId') ?? '');
 		const role = String(data.get('role') ?? 'member') as 'owner' | 'member' | 'viewer';
 
 		if (!userId) return fail(400, { memberError: 'User required' });
-		await addProjectMember(Number(params.id), userId, role);
+		await addProjectMember(params.id, userId, role);
 		return { success: true };
 	},
 
 	updateMemberRole: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(params.id);
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
-		const userId = Number(data.get('userId'));
+		const userId = String(data.get('userId') ?? '');
 		const role = String(data.get('role')) as 'owner' | 'member' | 'viewer';
 
-		await updateProjectMemberRole(Number(params.id), userId, role);
+		await updateProjectMemberRole(params.id, userId, role);
 		return { success: true };
 	},
 
 	removeMember: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(params.id);
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
-		const userId = Number(data.get('userId'));
+		const userId = String(data.get('userId') ?? '');
 
-		await removeProjectMember(Number(params.id), userId);
+		await removeProjectMember(params.id, userId);
 		return { success: true };
 	},
 

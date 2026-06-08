@@ -62,7 +62,7 @@
 		{/if}
 
 		<div class="ml-auto">
-			{#if data.userRole === 'owner' || data.userRole === 'member'}
+			{#if (data.userRole === 'owner' || data.userRole === 'member') && data.project.status !== 'archived'}
 				<CreateTaskDialog
 					{projectId}
 					statuses={data.statuses}
@@ -88,7 +88,6 @@
 				<table class="table table-sm">
 					<thead>
 						<tr>
-							<th>#</th>
 							<th>Title</th>
 							<th>Status</th>
 							<th>Priority</th>

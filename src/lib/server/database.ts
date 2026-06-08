@@ -1,16 +1,28 @@
-import postgres from 'postgres';
+import { MongoClient, ObjectId, type Collection, type Db } from 'mongodb';
+import bcrypt from 'bcryptjs';
 import { env } from '$env/dynamic/private';
 
-const sql = postgres(
-	`postgresql://${env.POSTGRES_USER}:${env.POSTGRES_PASSWORD}@${env.POSTGRES_HOST}:${env.POSTGRES_PORT}/${env.POSTGRES_DB}`
-);
+const uri = `mongodb://${env.MONGO_USER}:${env.MONGO_PASSWORD}@${env.MONGO_HOST}:${env.MONGO_PORT}/${env.MONGO_DB}?authSource=admin`;
 
-export default sql;
+let client: MongoClient;
+let db: Db;
+
+function getDb(): Db {
+	if (!db) {
+		client = new MongoClient(uri);
+		db = client.db(env.MONGO_DB);
+	}
+	return db;
+}
+
+function col<T extends object>(name: string): Collection<T> {
+	return getDb().collection<T>(name);
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type User = {
-	id: number;
+	id: string;
 	email: string;
 	username: string;
 	global_role: 'admin' | 'user';
@@ -18,42 +30,45 @@ export type User = {
 };
 
 export type Project = {
-	id: number;
+	id: string;
 	name: string;
 	description: string | null;
 	status: 'active' | 'archived';
 	color: string;
-	created_by: number;
+	created_by: string;
 	created_at: string;
 	role?: 'owner' | 'member' | 'viewer';
+	members: ProjectMember[];
+	statuses: CustomStatus[];
+	priorities: CustomPriority[];
 };
 
 export type ProjectMember = {
-	project_id: number;
-	user_id: number;
+	project_id: string;
+	user_id: string;
 	role: 'owner' | 'member' | 'viewer';
 	user: User;
 };
 
 export type CustomStatus = {
-	id: number;
-	project_id: number;
+	id: string;
+	project_id: string;
 	name: string;
 	color: string;
 	sort_order: number;
 };
 
 export type CustomPriority = {
-	id: number;
-	project_id: number;
+	id: string;
+	project_id: string;
 	name: string;
 	color: string;
 	sort_order: number;
 };
 
 export type Task = {
-	id: number;
-	project_id: number;
+	id: string;
+	project_id: string;
 	title: string;
 	description: string | null;
 	status: CustomStatus | null;
@@ -66,16 +81,16 @@ export type Task = {
 };
 
 export type TaskComment = {
-	id: number;
-	task_id: number;
+	id: string;
+	task_id: string;
 	author: User;
 	content: string;
 	created_at: string;
 };
 
 export type TaskHistory = {
-	id: number;
-	task_id: number;
+	id: string;
+	task_id: string;
 	changed_by: User;
 	field: string;
 	old_value: string | null;
@@ -83,507 +98,683 @@ export type TaskHistory = {
 	changed_at: string;
 };
 
+// ─── Internal document shapes ─────────────────────────────────────────────────
+
+type UserDoc = {
+	_id: ObjectId;
+	email: string;
+	password_hash: string;
+	username: string;
+	global_role: 'admin' | 'user';
+	created_at: Date;
+};
+
+type SessionDoc = {
+	_id: string; // token is the _id
+	user_id: ObjectId;
+	expires_at: Date;
+	created_at: Date;
+};
+
+type StatusSubdoc = { _id: ObjectId; name: string; color: string; sort_order: number };
+type PrioritySubdoc = { _id: ObjectId; name: string; color: string; sort_order: number };
+type MemberSubdoc = { user_id: ObjectId; role: 'owner' | 'member' | 'viewer' };
+
+type ProjectDoc = {
+	_id: ObjectId;
+	name: string;
+	description: string | null;
+	status: 'active' | 'archived';
+	color: string;
+	created_by: ObjectId;
+	created_at: Date;
+	members: MemberSubdoc[];
+	statuses: StatusSubdoc[];
+	priorities: PrioritySubdoc[];
+};
+
+type TaskDoc = {
+	_id: ObjectId;
+	project_id: ObjectId;
+	title: string;
+	description: string | null;
+	status_id: ObjectId | null;
+	priority_id: ObjectId | null;
+	reporter_id: ObjectId;
+	assignee_ids: ObjectId[];
+	due_date: Date | null;
+	created_at: Date;
+	updated_at: Date;
+};
+
+type CommentDoc = {
+	_id: ObjectId;
+	task_id: ObjectId;
+	author_id: ObjectId;
+	content: string;
+	created_at: Date;
+};
+
+type HistoryDoc = {
+	_id: ObjectId;
+	task_id: ObjectId;
+	changed_by: ObjectId;
+	field: string;
+	old_value: string | null;
+	new_value: string | null;
+	changed_at: Date;
+};
+
+// ─── Mappers ──────────────────────────────────────────────────────────────────
+
+function mapUser(doc: UserDoc): User {
+	return {
+		id: doc._id.toHexString(),
+		email: doc.email,
+		username: doc.username,
+		global_role: doc.global_role,
+		created_at: doc.created_at.toISOString(),
+	};
+}
+
+function mapStatus(s: StatusSubdoc, projectId: ObjectId): CustomStatus {
+	return { id: s._id.toHexString(), project_id: projectId.toHexString(), name: s.name, color: s.color, sort_order: s.sort_order };
+}
+
+function mapPriority(p: PrioritySubdoc, projectId: ObjectId): CustomPriority {
+	return { id: p._id.toHexString(), project_id: projectId.toHexString(), name: p.name, color: p.color, sort_order: p.sort_order };
+}
+
+function mapProject(doc: ProjectDoc, role?: 'owner' | 'member' | 'viewer'): Project {
+	return {
+		id: doc._id.toHexString(),
+		name: doc.name,
+		description: doc.description,
+		status: doc.status,
+		color: doc.color,
+		created_by: doc.created_by.toHexString(),
+		created_at: doc.created_at.toISOString(),
+		role,
+		members: [],
+		statuses: doc.statuses.map((s) => mapStatus(s, doc._id)),
+		priorities: doc.priorities.map((p) => mapPriority(p, doc._id)),
+	};
+}
+
+async function resolveUsers(ids: ObjectId[]): Promise<Map<string, User>> {
+	if (ids.length === 0) return new Map();
+	const docs = await col<UserDoc>('users').find({ _id: { $in: ids } }).toArray();
+	return new Map(docs.map((d) => [d._id.toHexString(), mapUser(d)]));
+}
+
+async function resolveTask(doc: TaskDoc, project: ProjectDoc): Promise<Task> {
+	const userIds = [doc.reporter_id, ...doc.assignee_ids];
+	const users = await resolveUsers(userIds);
+
+	const statusSubdoc = doc.status_id ? project.statuses.find((s) => s._id.equals(doc.status_id!)) : undefined;
+	const prioritySubdoc = doc.priority_id ? project.priorities.find((p) => p._id.equals(doc.priority_id!)) : undefined;
+
+	return {
+		id: doc._id.toHexString(),
+		project_id: doc.project_id.toHexString(),
+		title: doc.title,
+		description: doc.description,
+		status: statusSubdoc ? mapStatus(statusSubdoc, project._id) : null,
+		priority: prioritySubdoc ? mapPriority(prioritySubdoc, project._id) : null,
+		reporter: users.get(doc.reporter_id.toHexString())!,
+		assignees: doc.assignee_ids.map((id) => users.get(id.toHexString())!).filter(Boolean),
+		due_date: doc.due_date ? doc.due_date.toISOString() : null,
+		created_at: doc.created_at.toISOString(),
+		updated_at: doc.updated_at.toISOString(),
+	};
+}
+
+async function getProjectDoc(projectId: ObjectId): Promise<ProjectDoc | null> {
+	return col<ProjectDoc>('projects').findOne({ _id: projectId });
+}
+
 // ─── Auth / Sessions ──────────────────────────────────────────────────────────
 
 export async function createUser(email: string, password: string, username: string): Promise<User> {
-	const [user] = await sql<User[]>`
-		INSERT INTO users (email, password_hash, username)
-		VALUES (${email}, crypt(${password}, gen_salt('bf')), ${username})
-		RETURNING id, email, username, global_role, created_at
-	`;
-	return user;
+	const password_hash = await bcrypt.hash(password, 10);
+	const doc: UserDoc = {
+		_id: new ObjectId(),
+		email,
+		password_hash,
+		username,
+		global_role: 'user',
+		created_at: new Date(),
+	};
+	await col<UserDoc>('users').insertOne(doc);
+	return mapUser(doc);
 }
 
 export async function getUserByCredentials(email: string, password: string): Promise<User | null> {
-	const [user] = await sql<User[]>`
-		SELECT id, email, username, global_role, created_at
-		FROM users
-		WHERE email = ${email} AND password_hash = crypt(${password}, password_hash)
-	`;
-	return user ?? null;
+	const doc = await col<UserDoc>('users').findOne({ email });
+	if (!doc) return null;
+	const valid = await bcrypt.compare(password, doc.password_hash);
+	return valid ? mapUser(doc) : null;
 }
 
 export async function getSessionUser(token: string): Promise<User | null> {
-	const [user] = await sql<User[]>`
-		SELECT u.id, u.email, u.username, u.global_role, u.created_at
-		FROM sessions s
-		JOIN users u ON u.id = s.user_id
-		WHERE s.token = ${token} AND s.expires_at > NOW()
-	`;
-	// Piggyback cleanup — ideally this runs as a scheduled pg_cron job instead
-	sql`DELETE FROM sessions WHERE expires_at < NOW()`.catch(() => {});
-	return user ?? null;
+	const session = await col<SessionDoc>('sessions').findOne({
+		_id: token,
+		expires_at: { $gt: new Date() },
+	});
+	if (!session) return null;
+	const doc = await col<UserDoc>('users').findOne({ _id: session.user_id });
+	return doc ? mapUser(doc) : null;
 }
 
-export async function createSession(userId: number): Promise<string> {
-	const [{ token }] = await sql<[{ token: string }]>`
-		INSERT INTO sessions (token, user_id, expires_at)
-		VALUES (encode(gen_random_bytes(32), 'hex'), ${userId}, NOW() + INTERVAL '30 days')
-		RETURNING token
-	`;
+export async function createSession(userId: string): Promise<string> {
+	const token = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+	const expiresAt = new Date();
+	expiresAt.setDate(expiresAt.getDate() + 30);
+	await col<SessionDoc>('sessions').insertOne({
+		_id: token,
+		user_id: new ObjectId(userId),
+		expires_at: expiresAt,
+		created_at: new Date(),
+	});
 	return token;
 }
 
 export async function deleteSession(token: string): Promise<void> {
-	await sql`DELETE FROM sessions WHERE token = ${token}`;
+	await col<SessionDoc>('sessions').deleteOne({ _id: token });
 }
 
 // ─── Users ────────────────────────────────────────────────────────────────────
 
-export async function getUserById(id: number): Promise<User | null> {
-	const [user] = await sql<User[]>`
-		SELECT id, email, username, global_role, created_at FROM users WHERE id = ${id}
-	`;
-	return user ?? null;
+export async function getUserById(id: string): Promise<User | null> {
+	const doc = await col<UserDoc>('users').findOne({ _id: new ObjectId(id) });
+	return doc ? mapUser(doc) : null;
 }
 
 export async function searchUsers(query: string): Promise<User[]> {
-	const q = `%${query}%`;
-	return sql<User[]>`
-		SELECT id, email, username, global_role, created_at
-		FROM users
-		WHERE username ILIKE ${q} OR email ILIKE ${q}
-		LIMIT 20
-	`;
+	const re = new RegExp(query, 'i');
+	const docs = await col<UserDoc>('users')
+		.find({ $or: [{ username: re }, { email: re }] })
+		.limit(20)
+		.toArray();
+	return docs.map(mapUser);
 }
 
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
-export async function getProjectsForUser(userId: number): Promise<Project[]> {
-	return sql<Project[]>`
-		SELECT p.*, pm.role
-		FROM projects p
-		JOIN project_members pm ON pm.project_id = p.id
-		WHERE pm.user_id = ${userId}
-		ORDER BY p.created_at DESC
-	`;
+export async function getProjectsForUser(userId: string): Promise<Project[]> {
+	const oid = new ObjectId(userId);
+	const docs = await col<ProjectDoc>('projects')
+		.find({ 'members.user_id': oid })
+		.sort({ created_at: -1 })
+		.toArray();
+	return docs.map((doc) => {
+		const member = doc.members.find((m) => m.user_id.equals(oid));
+		return mapProject(doc, member?.role);
+	});
 }
 
 export async function getAllProjects(): Promise<Project[]> {
-	return sql<Project[]>`SELECT * FROM projects ORDER BY created_at DESC`;
+	const docs = await col<ProjectDoc>('projects').find().sort({ created_at: -1 }).toArray();
+	return docs.map((doc) => mapProject(doc));
 }
 
-export async function getProjectById(projectId: number): Promise<Project | null> {
-	const [project] = await sql<Project[]>`SELECT * FROM projects WHERE id = ${projectId}`;
-	return project ?? null;
+export async function getProjectById(projectId: string): Promise<Project | null> {
+	const doc = await getProjectDoc(new ObjectId(projectId));
+	return doc ? mapProject(doc) : null;
 }
 
 export async function createProject(data: {
 	name: string;
 	description?: string;
 	color: string;
-	createdBy: number;
+	createdBy: string;
 }): Promise<Project> {
-	const [project] = await sql<Project[]>`
-		INSERT INTO projects (name, description, color, created_by)
-		VALUES (${data.name}, ${data.description ?? null}, ${data.color}, ${data.createdBy})
-		RETURNING *
-	`;
-	await addProjectMember(project.id, data.createdBy, 'owner');
-	return project;
+	const createdBy = new ObjectId(data.createdBy);
+	const doc: ProjectDoc = {
+		_id: new ObjectId(),
+		name: data.name,
+		description: data.description ?? null,
+		status: 'active',
+		color: data.color,
+		created_by: createdBy,
+		created_at: new Date(),
+		members: [{ user_id: createdBy, role: 'owner' }],
+		statuses: [],
+		priorities: [],
+	};
+	await col<ProjectDoc>('projects').insertOne(doc);
+	return mapProject(doc, 'owner');
 }
 
 export async function updateProject(
-	projectId: number,
-	data: {
-		name?: string;
-		description?: string;
-		color?: string;
-		status?: 'active' | 'archived';
-	}
+	projectId: string,
+	data: { name?: string; description?: string; color?: string; status?: 'active' | 'archived' }
 ): Promise<Project> {
-	const updates: Record<string, unknown> = {};
-	if (data.name !== undefined) updates.name = data.name;
-	if (data.description !== undefined) updates.description = data.description;
-	if (data.color !== undefined) updates.color = data.color;
-	if (data.status !== undefined) updates.status = data.status;
+	const set: Record<string, unknown> = {};
+	if (data.name !== undefined) set.name = data.name;
+	if (data.description !== undefined) set.description = data.description;
+	if (data.color !== undefined) set.color = data.color;
+	if (data.status !== undefined) set.status = data.status;
 
-	const [project] = await sql<Project[]>`
-		UPDATE projects SET ${sql(updates)} WHERE id = ${projectId} RETURNING *
-	`;
-	return project;
+	const oid = new ObjectId(projectId);
+	await col<ProjectDoc>('projects').updateOne({ _id: oid }, { $set: set });
+	const doc = await getProjectDoc(oid);
+	return mapProject(doc!);
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+	const oid = new ObjectId(projectId);
+	await col<ProjectDoc>('projects').deleteOne({ _id: oid });
+	// Cascade: delete all tasks and their related data
+	const tasks = await col<TaskDoc>('tasks').find({ project_id: oid }, { projection: { _id: 1 } }).toArray();
+	const taskIds = tasks.map((t) => t._id);
+	await Promise.all([
+		col<TaskDoc>('tasks').deleteMany({ project_id: oid }),
+		col<CommentDoc>('comments').deleteMany({ task_id: { $in: taskIds } }),
+		col<HistoryDoc>('task_history').deleteMany({ task_id: { $in: taskIds } }),
+	]);
 }
 
 // ─── Project Members ──────────────────────────────────────────────────────────
 
-export async function getProjectMembers(projectId: number): Promise<ProjectMember[]> {
-	return sql<ProjectMember[]>`
-		SELECT pm.project_id, pm.user_id, pm.role,
-			json_build_object(
-				'id', u.id, 'email', u.email, 'username', u.username,
-				'global_role', u.global_role, 'created_at', u.created_at
-			) AS user
-		FROM project_members pm
-		JOIN users u ON u.id = pm.user_id
-		WHERE pm.project_id = ${projectId}
-	`;
+export async function getProjectMembers(projectId: string): Promise<ProjectMember[]> {
+	const doc = await getProjectDoc(new ObjectId(projectId));
+	if (!doc) return [];
+
+	const userIds = doc.members.map((m) => m.user_id);
+	const users = await resolveUsers(userIds);
+
+	return doc.members.map((m) => ({
+		project_id: projectId,
+		user_id: m.user_id.toHexString(),
+		role: m.role,
+		user: users.get(m.user_id.toHexString())!,
+	}));
 }
 
 export async function getUserProjectRole(
-	projectId: number,
-	userId: number
+	projectId: string,
+	userId: string
 ): Promise<'owner' | 'member' | 'viewer' | null> {
-	const [row] = await sql<[{ role: 'owner' | 'member' | 'viewer' }]>`
-		SELECT role FROM project_members WHERE project_id = ${projectId} AND user_id = ${userId}
-	`;
-	return row?.role ?? null;
+	const doc = await col<ProjectDoc>('projects').findOne(
+		{ _id: new ObjectId(projectId), 'members.user_id': new ObjectId(userId) },
+		{ projection: { 'members.$': 1 } }
+	);
+	return doc?.members[0]?.role ?? null;
 }
 
 export async function addProjectMember(
-	projectId: number,
-	userId: number,
+	projectId: string,
+	userId: string,
 	role: 'owner' | 'member' | 'viewer'
 ): Promise<void> {
-	await sql`
-		INSERT INTO project_members (project_id, user_id, role) VALUES (${projectId}, ${userId}, ${role})
-	`;
+	await col<ProjectDoc>('projects').updateOne(
+		{ _id: new ObjectId(projectId) },
+		{ $push: { members: { user_id: new ObjectId(userId), role } } }
+	);
 }
 
 export async function updateProjectMemberRole(
-	projectId: number,
-	userId: number,
+	projectId: string,
+	userId: string,
 	role: 'owner' | 'member' | 'viewer'
 ): Promise<void> {
-	await sql`
-		UPDATE project_members SET role = ${role}
-		WHERE project_id = ${projectId} AND user_id = ${userId}
-	`;
+	await col<ProjectDoc>('projects').updateOne(
+		{ _id: new ObjectId(projectId), 'members.user_id': new ObjectId(userId) },
+		{ $set: { 'members.$.role': role } }
+	);
 }
 
-export async function removeProjectMember(projectId: number, userId: number): Promise<void> {
-	await sql`DELETE FROM project_members WHERE project_id = ${projectId} AND user_id = ${userId}`;
+export async function removeProjectMember(projectId: string, userId: string): Promise<void> {
+	await col<ProjectDoc>('projects').updateOne(
+		{ _id: new ObjectId(projectId) },
+		{ $pull: { members: { user_id: new ObjectId(userId) } } }
+	);
 }
 
 // ─── Custom Statuses ──────────────────────────────────────────────────────────
 
-export async function getProjectStatuses(projectId: number): Promise<CustomStatus[]> {
-	return sql<CustomStatus[]>`
-		SELECT * FROM custom_statuses WHERE project_id = ${projectId} ORDER BY sort_order
-	`;
+export async function getProjectStatuses(projectId: string): Promise<CustomStatus[]> {
+	const doc = await getProjectDoc(new ObjectId(projectId));
+	if (!doc) return [];
+	return doc.statuses.sort((a, b) => a.sort_order - b.sort_order).map((s) => mapStatus(s, doc._id));
 }
 
 export async function createStatus(
-	projectId: number,
+	projectId: string,
 	data: { name: string; color: string; sort_order: number }
 ): Promise<CustomStatus> {
-	const [status] = await sql<CustomStatus[]>`
-		INSERT INTO custom_statuses (project_id, name, color, sort_order)
-		VALUES (${projectId}, ${data.name}, ${data.color}, ${data.sort_order})
-		RETURNING *
-	`;
-	return status;
+	const subdoc: StatusSubdoc = { _id: new ObjectId(), ...data };
+	const oid = new ObjectId(projectId);
+	await col<ProjectDoc>('projects').updateOne({ _id: oid }, { $push: { statuses: subdoc } });
+	return mapStatus(subdoc, oid);
 }
 
 export async function updateStatus(
-	statusId: number,
+	projectId: string,
+	statusId: string,
 	data: { name?: string; color?: string; sort_order?: number }
 ): Promise<CustomStatus> {
-	const updates: Record<string, unknown> = {};
-	if (data.name !== undefined) updates.name = data.name;
-	if (data.color !== undefined) updates.color = data.color;
-	if (data.sort_order !== undefined) updates.sort_order = data.sort_order;
+	const set: Record<string, unknown> = {};
+	if (data.name !== undefined) set['statuses.$.name'] = data.name;
+	if (data.color !== undefined) set['statuses.$.color'] = data.color;
+	if (data.sort_order !== undefined) set['statuses.$.sort_order'] = data.sort_order;
 
-	const [status] = await sql<CustomStatus[]>`
-		UPDATE custom_statuses SET ${sql(updates)} WHERE id = ${statusId} RETURNING *
-	`;
-	return status;
+	const oid = new ObjectId(projectId);
+	await col<ProjectDoc>('projects').updateOne(
+		{ _id: oid, 'statuses._id': new ObjectId(statusId) },
+		{ $set: set }
+	);
+	const doc = await getProjectDoc(oid);
+	const s = doc!.statuses.find((s) => s._id.toHexString() === statusId)!;
+	return mapStatus(s, oid);
 }
 
-export async function deleteStatus(statusId: number): Promise<void> {
-	await sql`DELETE FROM custom_statuses WHERE id = ${statusId}`;
+export async function deleteStatus(projectId: string, statusId: string): Promise<void> {
+	const oid = new ObjectId(projectId);
+	const sid = new ObjectId(statusId);
+	await col<ProjectDoc>('projects').updateOne({ _id: oid }, { $pull: { statuses: { _id: sid } } });
+	await col<TaskDoc>('tasks').updateMany({ project_id: oid, status_id: sid }, { $set: { status_id: null } });
 }
 
 // ─── Custom Priorities ────────────────────────────────────────────────────────
 
-export async function getProjectPriorities(projectId: number): Promise<CustomPriority[]> {
-	return sql<CustomPriority[]>`
-		SELECT * FROM custom_priorities WHERE project_id = ${projectId} ORDER BY sort_order
-	`;
+export async function getProjectPriorities(projectId: string): Promise<CustomPriority[]> {
+	const doc = await getProjectDoc(new ObjectId(projectId));
+	if (!doc) return [];
+	return doc.priorities.sort((a, b) => a.sort_order - b.sort_order).map((p) => mapPriority(p, doc._id));
 }
 
 export async function createPriority(
-	projectId: number,
+	projectId: string,
 	data: { name: string; color: string; sort_order: number }
 ): Promise<CustomPriority> {
-	const [priority] = await sql<CustomPriority[]>`
-		INSERT INTO custom_priorities (project_id, name, color, sort_order)
-		VALUES (${projectId}, ${data.name}, ${data.color}, ${data.sort_order})
-		RETURNING *
-	`;
-	return priority;
+	const subdoc: PrioritySubdoc = { _id: new ObjectId(), ...data };
+	const oid = new ObjectId(projectId);
+	await col<ProjectDoc>('projects').updateOne({ _id: oid }, { $push: { priorities: subdoc } });
+	return mapPriority(subdoc, oid);
 }
 
 export async function updatePriority(
-	priorityId: number,
+	projectId: string,
+	priorityId: string,
 	data: { name?: string; color?: string; sort_order?: number }
 ): Promise<CustomPriority> {
-	const updates: Record<string, unknown> = {};
-	if (data.name !== undefined) updates.name = data.name;
-	if (data.color !== undefined) updates.color = data.color;
-	if (data.sort_order !== undefined) updates.sort_order = data.sort_order;
+	const set: Record<string, unknown> = {};
+	if (data.name !== undefined) set['priorities.$.name'] = data.name;
+	if (data.color !== undefined) set['priorities.$.color'] = data.color;
+	if (data.sort_order !== undefined) set['priorities.$.sort_order'] = data.sort_order;
 
-	const [priority] = await sql<CustomPriority[]>`
-		UPDATE custom_priorities SET ${sql(updates)} WHERE id = ${priorityId} RETURNING *
-	`;
-	return priority;
+	const oid = new ObjectId(projectId);
+	await col<ProjectDoc>('projects').updateOne(
+		{ _id: oid, 'priorities._id': new ObjectId(priorityId) },
+		{ $set: set }
+	);
+	const doc = await getProjectDoc(oid);
+	const p = doc!.priorities.find((p) => p._id.toHexString() === priorityId)!;
+	return mapPriority(p, oid);
 }
 
-export async function deletePriority(priorityId: number): Promise<void> {
-	await sql`DELETE FROM custom_priorities WHERE id = ${priorityId}`;
+export async function deletePriority(projectId: string, priorityId: string): Promise<void> {
+	const oid = new ObjectId(projectId);
+	const pid = new ObjectId(priorityId);
+	await col<ProjectDoc>('projects').updateOne({ _id: oid }, { $pull: { priorities: { _id: pid } } });
+	await col<TaskDoc>('tasks').updateMany({ project_id: oid, priority_id: pid }, { $set: { priority_id: null } });
 }
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
 
 export async function getProjectTasks(
-	projectId: number,
+	projectId: string,
 	filters?: {
-		statusId?: number;
-		priorityId?: number;
-		assigneeId?: number;
+		statusId?: string;
+		priorityId?: string;
+		assigneeId?: string;
 		search?: string;
 	}
 ): Promise<Task[]> {
-	const statusFilter = filters?.statusId != null ? sql`AND t.status_id = ${filters.statusId}` : sql``;
-	const priorityFilter = filters?.priorityId != null ? sql`AND t.priority_id = ${filters.priorityId}` : sql``;
-	const assigneeFilter = filters?.assigneeId != null
-		? sql`AND EXISTS (SELECT 1 FROM task_assignees ta2 WHERE ta2.task_id = t.id AND ta2.user_id = ${filters.assigneeId})`
-		: sql``;
-	const searchFilter = filters?.search
-		? sql`AND (t.title ILIKE ${'%' + filters.search + '%'} OR t.description ILIKE ${'%' + filters.search + '%'})`
-		: sql``;
+	const oid = new ObjectId(projectId);
+	const query: Record<string, unknown> = { project_id: oid };
 
-	return sql<Task[]>`
-		SELECT
-			t.id, t.project_id, t.title, t.description, t.due_date, t.created_at, t.updated_at,
-			CASE WHEN cs.id IS NOT NULL THEN
-				json_build_object('id', cs.id, 'project_id', cs.project_id, 'name', cs.name, 'color', cs.color, 'sort_order', cs.sort_order)
-			END AS status,
-			CASE WHEN cp.id IS NOT NULL THEN
-				json_build_object('id', cp.id, 'project_id', cp.project_id, 'name', cp.name, 'color', cp.color, 'sort_order', cp.sort_order)
-			END AS priority,
-			json_build_object('id', r.id, 'email', r.email, 'username', r.username, 'global_role', r.global_role, 'created_at', r.created_at) AS reporter,
-			COALESCE(
-				json_agg(json_build_object('id', a.id, 'email', a.email, 'username', a.username, 'global_role', a.global_role, 'created_at', a.created_at))
-				FILTER (WHERE a.id IS NOT NULL),
-				'[]'
-			) AS assignees
-		FROM tasks t
-		LEFT JOIN custom_statuses cs ON cs.id = t.status_id
-		LEFT JOIN custom_priorities cp ON cp.id = t.priority_id
-		JOIN users r ON r.id = t.reporter_id
-		LEFT JOIN task_assignees ta ON ta.task_id = t.id
-		LEFT JOIN users a ON a.id = ta.user_id
-		WHERE t.project_id = ${projectId}
-		${statusFilter}
-		${priorityFilter}
-		${assigneeFilter}
-		${searchFilter}
-		GROUP BY t.id, cs.id, cp.id, r.id
-		ORDER BY t.created_at DESC
-	`;
+	if (filters?.statusId) query.status_id = new ObjectId(filters.statusId);
+	if (filters?.priorityId) query.priority_id = new ObjectId(filters.priorityId);
+	if (filters?.assigneeId) query.assignee_ids = new ObjectId(filters.assigneeId);
+	if (filters?.search) {
+		const re = new RegExp(filters.search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+		query.$or = [{ title: re }, { description: re }];
+	}
+
+	const project = await getProjectDoc(oid);
+	if (!project) return [];
+
+	const docs = await col<TaskDoc>('tasks').find(query).sort({ created_at: -1 }).toArray();
+	return Promise.all(docs.map((doc) => resolveTask(doc, project)));
 }
 
-export async function getTaskById(taskId: number): Promise<Task | null> {
-	const [task] = await sql<Task[]>`
-		SELECT
-			t.id, t.project_id, t.title, t.description, t.due_date, t.created_at, t.updated_at,
-			CASE WHEN cs.id IS NOT NULL THEN
-				json_build_object('id', cs.id, 'project_id', cs.project_id, 'name', cs.name, 'color', cs.color, 'sort_order', cs.sort_order)
-			END AS status,
-			CASE WHEN cp.id IS NOT NULL THEN
-				json_build_object('id', cp.id, 'project_id', cp.project_id, 'name', cp.name, 'color', cp.color, 'sort_order', cp.sort_order)
-			END AS priority,
-			json_build_object('id', r.id, 'email', r.email, 'username', r.username, 'global_role', r.global_role, 'created_at', r.created_at) AS reporter,
-			COALESCE(
-				json_agg(json_build_object('id', a.id, 'email', a.email, 'username', a.username, 'global_role', a.global_role, 'created_at', a.created_at))
-				FILTER (WHERE a.id IS NOT NULL),
-				'[]'
-			) AS assignees
-		FROM tasks t
-		LEFT JOIN custom_statuses cs ON cs.id = t.status_id
-		LEFT JOIN custom_priorities cp ON cp.id = t.priority_id
-		JOIN users r ON r.id = t.reporter_id
-		LEFT JOIN task_assignees ta ON ta.task_id = t.id
-		LEFT JOIN users a ON a.id = ta.user_id
-		WHERE t.id = ${taskId}
-		GROUP BY t.id, cs.id, cp.id, r.id
-	`;
-	return task ?? null;
+export async function getTaskById(taskId: string): Promise<Task | null> {
+	const doc = await col<TaskDoc>('tasks').findOne({ _id: new ObjectId(taskId) });
+	if (!doc) return null;
+	const project = await getProjectDoc(doc.project_id);
+	if (!project) return null;
+	return resolveTask(doc, project);
 }
 
 export async function createTask(data: {
-	projectId: number;
+	projectId: string;
 	title: string;
 	description?: string;
-	statusId?: number;
-	priorityId?: number;
-	reporterId: number;
+	statusId?: string;
+	priorityId?: string;
+	reporterId: string;
 	dueDate?: string;
 }): Promise<Task> {
-	const [{ id }] = await sql<[{ id: number }]>`
-		INSERT INTO tasks (project_id, title, description, status_id, priority_id, reporter_id, due_date)
-		VALUES (${data.projectId}, ${data.title}, ${data.description ?? null}, ${data.statusId ?? null}, ${data.priorityId ?? null}, ${data.reporterId}, ${data.dueDate ?? null})
-		RETURNING id
-	`;
-	return getTaskById(id) as Promise<Task>;
+	const doc: TaskDoc = {
+		_id: new ObjectId(),
+		project_id: new ObjectId(data.projectId),
+		title: data.title,
+		description: data.description ?? null,
+		status_id: data.statusId ? new ObjectId(data.statusId) : null,
+		priority_id: data.priorityId ? new ObjectId(data.priorityId) : null,
+		reporter_id: new ObjectId(data.reporterId),
+		assignee_ids: [],
+		due_date: data.dueDate ? new Date(data.dueDate) : null,
+		created_at: new Date(),
+		updated_at: new Date(),
+	};
+	await col<TaskDoc>('tasks').insertOne(doc);
+	return getTaskById(doc._id.toHexString()) as Promise<Task>;
 }
 
 export async function updateTask(
-	taskId: number,
+	taskId: string,
 	data: {
 		title?: string;
 		description?: string;
-		statusId?: number | null;
-		priorityId?: number | null;
+		statusId?: string | null;
+		priorityId?: string | null;
 		dueDate?: string | null;
 	}
 ): Promise<Task> {
-	const updates: Record<string, unknown> = { updated_at: new Date() };
-	if (data.title !== undefined) updates.title = data.title;
-	if (data.description !== undefined) updates.description = data.description;
-	if (data.statusId !== undefined) updates.status_id = data.statusId;
-	if (data.priorityId !== undefined) updates.priority_id = data.priorityId;
-	if (data.dueDate !== undefined) updates.due_date = data.dueDate;
+	const set: Record<string, unknown> = { updated_at: new Date() };
+	if (data.title !== undefined) set.title = data.title;
+	if (data.description !== undefined) set.description = data.description;
+	if (data.statusId !== undefined) set.status_id = data.statusId ? new ObjectId(data.statusId) : null;
+	if (data.priorityId !== undefined) set.priority_id = data.priorityId ? new ObjectId(data.priorityId) : null;
+	if (data.dueDate !== undefined) set.due_date = data.dueDate ? new Date(data.dueDate) : null;
 
-	await sql`UPDATE tasks SET ${sql(updates)} WHERE id = ${taskId}`;
+	await col<TaskDoc>('tasks').updateOne({ _id: new ObjectId(taskId) }, { $set: set });
 	return getTaskById(taskId) as Promise<Task>;
 }
 
-export async function deleteTask(taskId: number): Promise<void> {
-	await sql`DELETE FROM tasks WHERE id = ${taskId}`;
-}
-
-export async function deleteProject(projectId: number): Promise<void> {
-	await sql`DELETE FROM projects WHERE id = ${projectId}`;
+export async function deleteTask(taskId: string): Promise<void> {
+	const oid = new ObjectId(taskId);
+	await col<TaskDoc>('tasks').deleteOne({ _id: oid });
+	await Promise.all([
+		col<CommentDoc>('comments').deleteMany({ task_id: oid }),
+		col<HistoryDoc>('task_history').deleteMany({ task_id: oid }),
+	]);
 }
 
 export type TaskSearchResult = {
-	id: number;
+	id: string;
 	title: string;
 	description: string | null;
-	project_id: number;
+	project_id: string;
 	project_name: string;
 };
 
 export async function searchTasksGlobal(
-	userId: number,
+	userId: string,
 	query: string,
 	isAdmin: boolean
 ): Promise<TaskSearchResult[]> {
-	const q = `%${query}%`;
-	if (isAdmin) {
-		return sql<TaskSearchResult[]>`
-			SELECT t.id, t.title, t.description, p.id AS project_id, p.name AS project_name
-			FROM tasks t
-			JOIN projects p ON p.id = t.project_id
-			WHERE t.title ILIKE ${q} OR t.description ILIKE ${q}
-			ORDER BY t.updated_at DESC
-			LIMIT 15
-		`;
+	const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+	const taskQuery: Record<string, unknown> = { $or: [{ title: re }, { description: re }] };
+
+	if (!isAdmin) {
+		const projects = await col<ProjectDoc>('projects')
+			.find({ 'members.user_id': new ObjectId(userId) }, { projection: { _id: 1 } })
+			.toArray();
+		taskQuery.project_id = { $in: projects.map((p) => p._id) };
 	}
-	return sql<TaskSearchResult[]>`
-		SELECT t.id, t.title, t.description, p.id AS project_id, p.name AS project_name
-		FROM tasks t
-		JOIN projects p ON p.id = t.project_id
-		JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = ${userId}
-		WHERE t.title ILIKE ${q} OR t.description ILIKE ${q}
-		ORDER BY t.updated_at DESC
-		LIMIT 15
-	`;
+
+	const tasks = await col<TaskDoc>('tasks')
+		.find(taskQuery, { projection: { title: 1, description: 1, project_id: 1 } })
+		.sort({ updated_at: -1 })
+		.limit(15)
+		.toArray();
+
+	if (tasks.length === 0) return [];
+
+	const projectIds = [...new Set(tasks.map((t) => t.project_id.toHexString()))].map((id) => new ObjectId(id));
+	const projects = await col<ProjectDoc>('projects')
+		.find({ _id: { $in: projectIds } }, { projection: { name: 1 } })
+		.toArray();
+	const projectMap = new Map(projects.map((p) => [p._id.toHexString(), p.name]));
+
+	return tasks.map((t) => ({
+		id: t._id.toHexString(),
+		title: t.title,
+		description: t.description,
+		project_id: t.project_id.toHexString(),
+		project_name: projectMap.get(t.project_id.toHexString()) ?? '',
+	}));
 }
 
 // ─── Task Assignees ───────────────────────────────────────────────────────────
 
-export async function getTaskAssignees(taskId: number): Promise<User[]> {
-	return sql<User[]>`
-		SELECT u.id, u.email, u.username, u.global_role, u.created_at
-		FROM task_assignees ta
-		JOIN users u ON u.id = ta.user_id
-		WHERE ta.task_id = ${taskId}
-	`;
+export async function getTaskAssignees(taskId: string): Promise<User[]> {
+	const doc = await col<TaskDoc>('tasks').findOne({ _id: new ObjectId(taskId) }, { projection: { assignee_ids: 1 } });
+	if (!doc || doc.assignee_ids.length === 0) return [];
+	const users = await resolveUsers(doc.assignee_ids);
+	return doc.assignee_ids.map((id) => users.get(id.toHexString())!).filter(Boolean);
 }
 
-export async function addTaskAssignee(taskId: number, userId: number): Promise<void> {
-	await sql`INSERT INTO task_assignees (task_id, user_id) VALUES (${taskId}, ${userId})`;
+export async function addTaskAssignee(taskId: string, userId: string): Promise<void> {
+	await col<TaskDoc>('tasks').updateOne(
+		{ _id: new ObjectId(taskId) },
+		{ $addToSet: { assignee_ids: new ObjectId(userId) } }
+	);
 }
 
-export async function removeTaskAssignee(taskId: number, userId: number): Promise<void> {
-	await sql`DELETE FROM task_assignees WHERE task_id = ${taskId} AND user_id = ${userId}`;
+export async function removeTaskAssignee(taskId: string, userId: string): Promise<void> {
+	await col<TaskDoc>('tasks').updateOne(
+		{ _id: new ObjectId(taskId) },
+		{ $pull: { assignee_ids: new ObjectId(userId) } }
+	);
+}
+
+export async function isTaskAssignee(taskId: string, userId: string): Promise<boolean> {
+	const doc = await col<TaskDoc>('tasks').findOne(
+		{ _id: new ObjectId(taskId), assignee_ids: new ObjectId(userId) },
+		{ projection: { _id: 1 } }
+	);
+	return !!doc;
 }
 
 // ─── Comments ─────────────────────────────────────────────────────────────────
 
-export async function getTaskComments(taskId: number): Promise<TaskComment[]> {
-	return sql<TaskComment[]>`
-		SELECT c.id, c.task_id, c.content, c.created_at,
-			json_build_object('id', u.id, 'email', u.email, 'username', u.username, 'global_role', u.global_role, 'created_at', u.created_at) AS author
-		FROM comments c
-		JOIN users u ON u.id = c.author_id
-		WHERE c.task_id = ${taskId}
-		ORDER BY c.created_at ASC
-	`;
+export async function getTaskComments(taskId: string): Promise<TaskComment[]> {
+	const docs = await col<CommentDoc>('comments')
+		.find({ task_id: new ObjectId(taskId) })
+		.sort({ created_at: 1 })
+		.toArray();
+
+	const users = await resolveUsers(docs.map((d) => d.author_id));
+	return docs.map((d) => ({
+		id: d._id.toHexString(),
+		task_id: d.task_id.toHexString(),
+		content: d.content,
+		created_at: d.created_at.toISOString(),
+		author: users.get(d.author_id.toHexString())!,
+	}));
 }
 
-export async function createComment(
-	taskId: number,
-	authorId: number,
-	content: string
-): Promise<TaskComment> {
-	const [comment] = await sql<TaskComment[]>`
-		WITH inserted AS (
-			INSERT INTO comments (task_id, author_id, content) VALUES (${taskId}, ${authorId}, ${content})
-			RETURNING *
-		)
-		SELECT i.id, i.task_id, i.content, i.created_at,
-			json_build_object('id', u.id, 'email', u.email, 'username', u.username, 'global_role', u.global_role, 'created_at', u.created_at) AS author
-		FROM inserted i
-		JOIN users u ON u.id = i.author_id
-	`;
-	return comment;
+export async function createComment(taskId: string, authorId: string, content: string): Promise<TaskComment> {
+	const doc: CommentDoc = {
+		_id: new ObjectId(),
+		task_id: new ObjectId(taskId),
+		author_id: new ObjectId(authorId),
+		content,
+		created_at: new Date(),
+	};
+	await col<CommentDoc>('comments').insertOne(doc);
+	const user = await getUserById(authorId);
+	return {
+		id: doc._id.toHexString(),
+		task_id: taskId,
+		content,
+		created_at: doc.created_at.toISOString(),
+		author: user!,
+	};
 }
 
-export async function deleteComment(commentId: number): Promise<void> {
-	await sql`DELETE FROM comments WHERE id = ${commentId}`;
+export async function deleteComment(commentId: string): Promise<void> {
+	await col<CommentDoc>('comments').deleteOne({ _id: new ObjectId(commentId) });
+}
+
+export async function getCommentById(
+	commentId: string
+): Promise<{ id: string; author_id: string; task_id: string } | null> {
+	const doc = await col<CommentDoc>('comments').findOne({ _id: new ObjectId(commentId) });
+	if (!doc) return null;
+	return { id: doc._id.toHexString(), author_id: doc.author_id.toHexString(), task_id: doc.task_id.toHexString() };
 }
 
 // ─── Task History ─────────────────────────────────────────────────────────────
 
-export async function getTaskHistory(taskId: number): Promise<TaskHistory[]> {
-	return sql<TaskHistory[]>`
-		SELECT th.id, th.task_id, th.field, th.old_value, th.new_value, th.changed_at,
-			json_build_object('id', u.id, 'email', u.email, 'username', u.username, 'global_role', u.global_role, 'created_at', u.created_at) AS changed_by
-		FROM task_history th
-		JOIN users u ON u.id = th.changed_by
-		WHERE th.task_id = ${taskId}
-		ORDER BY th.changed_at DESC
-	`;
+export async function getTaskHistory(taskId: string): Promise<TaskHistory[]> {
+	const docs = await col<HistoryDoc>('task_history')
+		.find({ task_id: new ObjectId(taskId) })
+		.sort({ changed_at: -1 })
+		.toArray();
+
+	const users = await resolveUsers(docs.map((d) => d.changed_by));
+	return docs.map((d) => ({
+		id: d._id.toHexString(),
+		task_id: d.task_id.toHexString(),
+		field: d.field,
+		old_value: d.old_value,
+		new_value: d.new_value,
+		changed_at: d.changed_at.toISOString(),
+		changed_by: users.get(d.changed_by.toHexString())!,
+	}));
 }
 
 export async function addTaskHistory(
-	taskId: number,
-	userId: number,
+	taskId: string,
+	userId: string,
 	field: string,
 	oldValue: string | null,
 	newValue: string | null
 ): Promise<void> {
-	await sql`
-		INSERT INTO task_history (task_id, changed_by, field, old_value, new_value)
-		VALUES (${taskId}, ${userId}, ${field}, ${oldValue}, ${newValue})
-	`;
-}
-
-export async function isTaskAssignee(taskId: number, userId: number): Promise<boolean> {
-	const [row] = await sql`
-		SELECT 1 FROM task_assignees WHERE task_id = ${taskId} AND user_id = ${userId}
-	`;
-	return !!row;
-}
-
-export async function getCommentById(
-	commentId: number
-): Promise<{ id: number; author_id: number; task_id: number } | null> {
-	const [row] = await sql<[{ id: number; author_id: number; task_id: number }]>`
-		SELECT id, author_id, task_id FROM comments WHERE id = ${commentId}
-	`;
-	return row ?? null;
+	await col<HistoryDoc>('task_history').insertOne({
+		_id: new ObjectId(),
+		task_id: new ObjectId(taskId),
+		changed_by: new ObjectId(userId),
+		field,
+		old_value: oldValue,
+		new_value: newValue,
+		changed_at: new Date(),
+	});
 }

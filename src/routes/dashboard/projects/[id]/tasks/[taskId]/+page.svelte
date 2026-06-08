@@ -9,7 +9,7 @@
 	const { project, statuses, priorities, members, userRole, user } = $derived(data);
 
 	const isAssignee = $derived(task.assignees.some((a) => a.id === user.id));
-	const canEdit = $derived(userRole === 'owner' || isAssignee);
+	const canEdit = $derived(project.status !== 'archived' && (userRole === 'owner' || isAssignee));
 
 	let editingTitle = $state(false);
 	let editingDescription = $state(false);
@@ -237,6 +237,7 @@
 						<p class="text-base-content/40 text-sm italic">No comments yet</p>
 					{/each}
 
+					{#if project.status !== 'archived'}
 					<form
 						method="POST"
 						action="?/addComment"
@@ -265,6 +266,7 @@
 							</div>
 						</div>
 					</form>
+					{/if}
 				</div>
 			</div>
 
@@ -459,7 +461,7 @@
 						<p class="text-base-content/40 text-sm italic">None assigned</p>
 					{/each}
 
-					{#if !isAssignee && userRole !== 'viewer'}
+					{#if !isAssignee && userRole !== 'viewer' && project.status !== 'archived'}
 						<form method="POST" action="?/assignSelf" use:enhance>
 							<button type="submit" class="btn btn-ghost btn-xs w-full">
 								Assign myself
@@ -467,7 +469,7 @@
 						</form>
 					{/if}
 
-					{#if userRole === 'owner'}
+					{#if userRole === 'owner' && project.status !== 'archived'}
 						<form
 							method="POST"
 							action="?/addAssignee"
@@ -492,8 +494,8 @@
 				</div>
 			</div>
 
-			<!-- Delete task (owner only) -->
-			{#if userRole === 'owner'}
+			<!-- Delete task (owner only, active projects) -->
+			{#if userRole === 'owner' && project.status !== 'archived'}
 				<div class="card bg-base-100 shadow-sm">
 					<div class="card-body p-4">
 						<form

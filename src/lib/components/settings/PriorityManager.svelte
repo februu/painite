@@ -4,7 +4,7 @@
 
 	let { priorities }: { priorities: CustomPriority[] } = $props();
 
-	let editingId = $state<number | null>(null);
+	let editingId = $state<string | null>(null);
 	let newName = $state('');
 	let newColor = $state('#ef4444');
 </script>

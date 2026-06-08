@@ -19,12 +19,12 @@ import {
 } from '$lib/server/database';
 import type { Actions, PageServerLoad } from './$types';
 
-async function getRole(projectId: number, userId: number, globalRole: string) {
+async function getRole(projectId: string, userId: string, globalRole: string) {
 	if (globalRole === 'admin') return 'owner' as const;
 	return getUserProjectRole(projectId, userId);
 }
 
-async function assertNotArchived(projectId: number) {
+async function assertNotArchived(projectId: string) {
 	const project = await getProjectById(projectId);
 	if (project?.status === 'archived') return fail(403, { error: 'This project is archived' });
 	return null;
@@ -33,7 +33,7 @@ async function assertNotArchived(projectId: number) {
 export const load: PageServerLoad = async ({ params, locals }) => {
 	if (!locals.user) redirect(302, '/login');
 
-	const taskId = Number(params.taskId);
+	const taskId = params.taskId;
 	const task = await getTaskById(taskId);
 	if (!task) error(404, 'Task not found');
 
@@ -49,8 +49,8 @@ export const actions: Actions = {
 	updateTask: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
 
-		const projectId = Number(params.id);
-		const taskId = Number(params.taskId);
+		const projectId = params.id;
+		const taskId = params.taskId;
 
 		const archivedErr = await assertNotArchived(projectId);
 		if (archivedErr) return archivedErr;
@@ -76,14 +76,14 @@ export const actions: Actions = {
 		const oldTask = await getTaskById(taskId);
 		if (!oldTask) return fail(404, { error: 'Task not found' });
 
-		const newStatusId = rawStatus !== null ? (rawStatus ? Number(rawStatus) : null) : (oldTask.status?.id ?? null);
-		const newPriorityId = rawPriority !== null ? (rawPriority ? Number(rawPriority) : null) : (oldTask.priority?.id ?? null);
+		const newStatusId = rawStatus !== null ? (rawStatus ? String(rawStatus) : null) : (oldTask.status?.id ?? null);
+		const newPriorityId = rawPriority !== null ? (rawPriority ? String(rawPriority) : null) : (oldTask.priority?.id ?? null);
 
 		const newTask = await updateTask(taskId, {
 			title,
 			description: description || undefined,
-			statusId: rawStatus ? Number(rawStatus) : rawStatus === '' ? null : undefined,
-			priorityId: rawPriority ? Number(rawPriority) : rawPriority === '' ? null : undefined,
+			statusId: rawStatus ? String(rawStatus) : rawStatus === '' ? null : undefined,
+			priorityId: rawPriority ? String(rawPriority) : rawPriority === '' ? null : undefined,
 			dueDate: dueDate || null
 		});
 
@@ -117,8 +117,8 @@ export const actions: Actions = {
 	addAssignee: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
 
-		const projectId = Number(params.id);
-		const taskId = Number(params.taskId);
+		const projectId = params.id;
+		const taskId = params.taskId;
 
 		const archivedErr = await assertNotArchived(projectId);
 		if (archivedErr) return archivedErr;
@@ -127,13 +127,13 @@ export const actions: Actions = {
 		if (!role || role === 'viewer') return fail(403, { error: 'Access denied' });
 
 		const data = await request.formData();
-		const userId = Number(data.get('userId'));
+		const userId = String(data.get('userId') ?? '');
 		if (!userId) return fail(400, { error: 'User required' });
 
 		await addTaskAssignee(taskId, userId);
 
 		const assignedUser = await getUserById(userId);
-		await addTaskHistory(taskId, locals.user.id, 'assignee_added', null, assignedUser?.username ?? String(userId));
+		await addTaskHistory(taskId, locals.user.id, 'assignee_added', null, assignedUser?.username ?? userId);
 
 		return { success: true };
 	},
@@ -141,8 +141,8 @@ export const actions: Actions = {
 	removeAssignee: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
 
-		const projectId = Number(params.id);
-		const taskId = Number(params.taskId);
+		const projectId = params.id;
+		const taskId = params.taskId;
 
 		const archivedErr = await assertNotArchived(projectId);
 		if (archivedErr) return archivedErr;
@@ -151,11 +151,11 @@ export const actions: Actions = {
 		if (!role || role === 'viewer') return fail(403, { error: 'Access denied' });
 
 		const data = await request.formData();
-		const userId = Number(data.get('userId'));
+		const userId = String(data.get('userId') ?? '');
 
 		const removedUser = await getUserById(userId);
 		await removeTaskAssignee(taskId, userId);
-		await addTaskHistory(taskId, locals.user.id, 'assignee_removed', removedUser?.username ?? String(userId), null);
+		await addTaskHistory(taskId, locals.user.id, 'assignee_removed', removedUser?.username ?? userId, null);
 
 		return { success: true };
 	},
@@ -163,8 +163,8 @@ export const actions: Actions = {
 	assignSelf: async ({ params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
 
-		const projectId = Number(params.id);
-		const taskId = Number(params.taskId);
+		const projectId = params.id;
+		const taskId = params.taskId;
 
 		const archivedErr = await assertNotArchived(projectId);
 		if (archivedErr) return archivedErr;
@@ -181,10 +181,10 @@ export const actions: Actions = {
 	addComment: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
 
-		const archivedErr = await assertNotArchived(Number(params.id));
+		const archivedErr = await assertNotArchived(params.id);
 		if (archivedErr) return archivedErr;
 
-		const taskId = Number(params.taskId);
+		const taskId = params.taskId;
 		const data = await request.formData();
 		const content = String(data.get('content') ?? '').trim();
 		if (!content) return fail(400, { error: 'Comment cannot be empty' });
@@ -196,9 +196,9 @@ export const actions: Actions = {
 	deleteComment: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
 
-		const projectId = Number(params.id);
+		const projectId = params.id;
 		const data = await request.formData();
-		const commentId = Number(data.get('commentId'));
+		const commentId = String(data.get('commentId') ?? '');
 
 		const comment = await getCommentById(commentId);
 		if (!comment) return fail(404, { error: 'Comment not found' });
@@ -220,7 +220,7 @@ export const actions: Actions = {
 	deleteTask: async ({ params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
 
-		const projectId = Number(params.id);
+		const projectId = params.id;
 
 		const archivedErr = await assertNotArchived(projectId);
 		if (archivedErr) return archivedErr;
@@ -228,7 +228,7 @@ export const actions: Actions = {
 		const role = await getRole(projectId, locals.user.id, locals.user.global_role);
 		if (role !== 'owner') return fail(403, { error: 'Only the project owner can delete tasks' });
 
-		await deleteTask(Number(params.taskId));
+		await deleteTask(params.taskId);
 		redirect(302, `/dashboard/projects/${params.id}`);
 	},
 

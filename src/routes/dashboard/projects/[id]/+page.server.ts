@@ -3,15 +3,15 @@ import { addTaskHistory, createTask, getProjectById, getProjectTasks, getUserPro
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params, url }) => {
-	const projectId = Number(params.id);
+	const projectId = params.id;
 
 	const rawStatus = url.searchParams.get('status');
 	const rawPriority = url.searchParams.get('priority');
 	const search = url.searchParams.get('q') ?? undefined;
 
 	const tasks = await getProjectTasks(projectId, {
-		statusId: rawStatus ? Number(rawStatus) : undefined,
-		priorityId: rawPriority ? Number(rawPriority) : undefined,
+		statusId: rawStatus ?? undefined,
+		priorityId: rawPriority ?? undefined,
 		search
 	});
 
@@ -22,7 +22,7 @@ export const actions: Actions = {
 	createTask: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
 
-		const projectId = Number(params.id);
+		const projectId = params.id;
 
 		const project = await getProjectById(projectId);
 		if (project?.status === 'archived') return fail(403, { error: 'This project is archived' });
@@ -50,8 +50,8 @@ export const actions: Actions = {
 			projectId,
 			title,
 			description: description || undefined,
-			statusId: rawStatus ? Number(rawStatus) : undefined,
-			priorityId: rawPriority ? Number(rawPriority) : undefined,
+			statusId: rawStatus ? String(rawStatus) : undefined,
+			priorityId: rawPriority ? String(rawPriority) : undefined,
 			reporterId: locals.user.id,
 			dueDate: dueDate || undefined
 		});

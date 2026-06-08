@@ -1,20 +1,20 @@
 services:
 
-  postgres:
-    image: postgres:17-alpine
+  mongo:
+    image: mongo:8
     restart: unless-stopped
     env_file: .env
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-painite}
-      POSTGRES_USER: ${POSTGRES_USER:-painite}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-painite}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-painite}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-painite}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-painite}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${MONGO_PORT:-27017}:27017"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - mongo_data:/data/db
+      - ./db/init.js:/docker-entrypoint-initdb.d/init.js:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-painite} -d ${POSTGRES_DB:-painite}"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -24,16 +24,17 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
+      MONGO_HOST: mongo
+      MONGO_PORT: 27017
+      CI: "true"
     ports:
       - "5173:5173"
     volumes:
       - .:/app
       - /app/node_modules
     depends_on:
-      postgres:
+      mongo:
         condition: service_healthy
 
 volumes:
-  postgres_data:
+  mongo_data:

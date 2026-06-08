@@ -5,11 +5,11 @@
 	let {
 		members,
 		currentUserId
-	}: { members: ProjectMember[]; currentUserId: number } = $props();
+	}: { members: ProjectMember[]; currentUserId: string } = $props();
 
 	let searchQuery = $state('');
 	let userResults = $state<User[]>([]);
-	let selectedUserId = $state<number | null>(null);
+	let selectedUserId = $state<string | null>(null);
 	let searching = $state(false);
 
 	const roleBadge: Record<string, string> = {

@@ -28,6 +28,21 @@
 		</div>
 	</div>
 
+	{#if data.project.status === 'archived'}
+		<div class="flex items-center justify-between gap-3 border-b bg-warning/10 px-6 py-2 text-sm text-warning-content">
+			<span class="font-medium">This project is archived. It is read-only and cannot be modified.</span>
+			{#if data.userRole === 'owner'}
+				<form method="POST" action="settings?/updateProject">
+					<input type="hidden" name="name" value={data.project.name} />
+					<input type="hidden" name="description" value={data.project.description ?? ''} />
+					<input type="hidden" name="color" value={data.project.color} />
+					<input type="hidden" name="status" value="active" />
+					<button type="submit" class="btn btn-xs btn-warning">Reactivate</button>
+				</form>
+			{/if}
+		</div>
+	{/if}
+
 	<div class="flex-1 overflow-auto">
 		{@render children()}
 	</div>

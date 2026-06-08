@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Task } from '$lib/server/database';
 
-	let { task, projectId }: { task: Task; projectId: number } = $props();
+	let { task, projectId }: { task: Task; projectId: string } = $props();
 
 	function formatDate(dateStr: string | null) {
 		if (!dateStr) return null;
@@ -14,9 +14,6 @@
 </script>
 
 <tr class="hover cursor-pointer" onclick={() => (window.location.href = `/dashboard/projects/${projectId}/tasks/${task.id}`)}>
-	<td class="w-px">
-		<span class="text-base-content/40 text-xs font-mono">#{task.id}</span>
-	</td>
 	<td class="max-w-xs">
 		<a
 			href="/dashboard/projects/{projectId}/tasks/{task.id}"

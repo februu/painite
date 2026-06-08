@@ -50,11 +50,14 @@
 					action="?/createProject"
 					use:enhance={() => {
 						submitting = true;
-						return async ({ result }) => {
+						return async ({ result, update }) => {
 							submitting = false;
-							if (result.type === 'success' && result.data?.projectId) {
+							if (result.type === 'success') {
 								close();
-								await goto(`/dashboard/projects/${result.data.projectId}`);
+								const projectId = (result.data as Record<string, unknown> | undefined)?.projectId as string | undefined;
+								if (projectId) await goto(`/dashboard/projects/${projectId}`);
+							} else {
+								await update();
 							}
 						};
 					}}

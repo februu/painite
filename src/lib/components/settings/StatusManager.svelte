@@ -4,7 +4,7 @@
 
 	let { statuses }: { statuses: CustomStatus[] } = $props();
 
-	let editingId = $state<number | null>(null);
+	let editingId = $state<string | null>(null);
 	let newName = $state('');
 	let newColor = $state('#6366f1');
 </script>
