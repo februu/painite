@@ -11,9 +11,16 @@ import {
 	addProjectMember,
 	updateProjectMemberRole,
 	removeProjectMember,
-	searchUsers
+	searchUsers,
+	getProjectById
 } from '$lib/server/database';
 import type { Actions, PageServerLoad } from './$types';
+
+async function assertNotArchived(projectId: number) {
+	const project = await getProjectById(projectId);
+	if (project?.status === 'archived') return fail(403, { error: 'This project is archived' });
+	return null;
+}
 
 export const load: PageServerLoad = async ({ parent }) => {
 	const { userRole } = await parent();
@@ -44,6 +51,8 @@ export const actions: Actions = {
 
 	createStatus: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(Number(params.id));
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '').trim();
 		const color = String(data.get('color') ?? '#6366f1');
@@ -55,8 +64,10 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	updateStatus: async ({ request, locals }) => {
+	updateStatus: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(Number(params.id));
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
 		const id = Number(data.get('id'));
 		const name = String(data.get('name') ?? '').trim();
@@ -67,8 +78,10 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	deleteStatus: async ({ request, locals }) => {
+	deleteStatus: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(Number(params.id));
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
 		await deleteStatus(Number(data.get('id')));
 		return { success: true };
@@ -76,6 +89,8 @@ export const actions: Actions = {
 
 	createPriority: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(Number(params.id));
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
 		const name = String(data.get('name') ?? '').trim();
 		const color = String(data.get('color') ?? '#6366f1');
@@ -87,8 +102,10 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	updatePriority: async ({ request, locals }) => {
+	updatePriority: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(Number(params.id));
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
 		const id = Number(data.get('id'));
 		const name = String(data.get('name') ?? '').trim();
@@ -99,8 +116,10 @@ export const actions: Actions = {
 		return { success: true };
 	},
 
-	deletePriority: async ({ request, locals }) => {
+	deletePriority: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(Number(params.id));
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
 		await deletePriority(Number(data.get('id')));
 		return { success: true };
@@ -108,6 +127,8 @@ export const actions: Actions = {
 
 	inviteMember: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(Number(params.id));
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
 		const userId = Number(data.get('userId'));
 		const role = String(data.get('role') ?? 'member') as 'owner' | 'member' | 'viewer';
@@ -119,6 +140,8 @@ export const actions: Actions = {
 
 	updateMemberRole: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(Number(params.id));
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
 		const userId = Number(data.get('userId'));
 		const role = String(data.get('role')) as 'owner' | 'member' | 'viewer';
@@ -129,6 +152,8 @@ export const actions: Actions = {
 
 	removeMember: async ({ request, params, locals }) => {
 		if (!locals.user) redirect(302, '/login');
+		const archivedErr = await assertNotArchived(Number(params.id));
+		if (archivedErr) return archivedErr;
 		const data = await request.formData();
 		const userId = Number(data.get('userId'));
 

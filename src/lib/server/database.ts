@@ -1,5 +1,6 @@
 import postgres from 'postgres';
 import { env } from '$env/dynamic/private';
+import bcrypt from 'bcryptjs';
 
 const sql = postgres(
 	`postgresql://${env.POSTGRES_USER}:${env.POSTGRES_PASSWORD}@${env.POSTGRES_HOST}:${env.POSTGRES_PORT}/${env.POSTGRES_DB}`
@@ -86,21 +87,26 @@ export type TaskHistory = {
 // ─── Auth / Sessions ──────────────────────────────────────────────────────────
 
 export async function createUser(email: string, password: string, username: string): Promise<User> {
+	const password_hash = await bcrypt.hash(password, 12);
 	const [user] = await sql<User[]>`
 		INSERT INTO users (email, password_hash, username)
-		VALUES (${email}, crypt(${password}, gen_salt('bf')), ${username})
+		VALUES (${email}, ${password_hash}, ${username})
 		RETURNING id, email, username, global_role, created_at
 	`;
 	return user;
 }
 
 export async function getUserByCredentials(email: string, password: string): Promise<User | null> {
-	const [user] = await sql<User[]>`
-		SELECT id, email, username, global_role, created_at
+	const [row] = await sql<(User & { password_hash: string })[]>`
+		SELECT id, email, username, global_role, created_at, password_hash
 		FROM users
-		WHERE email = ${email} AND password_hash = crypt(${password}, password_hash)
+		WHERE email = ${email}
 	`;
-	return user ?? null;
+	if (!row) return null;
+	const valid = await bcrypt.compare(password, row.password_hash);
+	if (!valid) return null;
+	const { password_hash: _, ...user } = row;
+	return user as User;
 }
 
 export async function getSessionUser(token: string): Promise<User | null> {

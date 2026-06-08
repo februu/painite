@@ -98,3 +98,4 @@ Thumbs.db
 # IDE
 .idea/
 .vscode/
+.pnpm-store
