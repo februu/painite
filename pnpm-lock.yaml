@@ -17,6 +17,9 @@ importers:
       mongodb:
         specifier: ^7.2.0
         version: 7.2.0
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
       tailwind-merge:
         specifier: ^3.5.0
         version: 3.5.0

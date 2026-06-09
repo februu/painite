@@ -1,6 +1,7 @@
 import { MongoClient, ObjectId, type Collection, type Db } from 'mongodb';
 import bcrypt from 'bcryptjs';
 import { env } from '$env/dynamic/private';
+import bcrypt from 'bcryptjs';
 
 const uri = `mongodb://${env.MONGO_USER}:${env.MONGO_PASSWORD}@${env.MONGO_HOST}:${env.MONGO_PORT}/${env.MONGO_DB}?authSource=admin`;
 
