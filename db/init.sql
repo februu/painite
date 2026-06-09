@@ -153,7 +153,6 @@ INSERT INTO task_assignees (task_id, user_id) VALUES
     (1, 1),
     (2, 2),
     (4, 1),
-    (4, 3),
     (6, 2),
     (7, 4);
 
