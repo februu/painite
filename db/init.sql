@@ -99,10 +99,10 @@ CREATE TABLE
 -- ─── Seed data ────────────────────────────────────────────────────────────────
 
 INSERT INTO users (id, email, password_hash, username, global_role, created_at) VALUES
-    (1, 'admin@test.com',     "$2b$10$vdZd2gxlr599YvfJrBeiSOzpNF5vgWSkwQ2xkUG25WDW0o7FEfeUC", 'devuser', 'admin', '2025-01-01T00:00:00Z'),
-    (2, 'test@test.com',   "$2b$10$vdZd2gxlr599YvfJrBeiSOzpNF5vgWSkwQ2xkUG25WDW0o7FEfeUC", 'Testowy',   'user',  '2025-01-02T00:00:00Z'),
-    (3, 'kowalski@test.com',     "$2b$10$vdZd2gxlr599YvfJrBeiSOzpNF5vgWSkwQ2xkUG25WDW0o7FEfeUC", 'Jan Kowalski',     'user',  '2025-01-03T00:00:00Z'),
-    (4, 'nowak@test.com', "$2b$10$vdZd2gxlr599YvfJrBeiSOzpNF5vgWSkwQ2xkUG25WDW0o7FEfeUC", 'Anna Nowak', 'user',  '2025-01-04T00:00:00Z');
+    (1, 'admin@test.com',     '$2b$10$vdZd2gxlr599YvfJrBeiSOzpNF5vgWSkwQ2xkUG25WDW0o7FEfeUC', 'devuser', 'admin', '2025-01-01T00:00:00Z'),
+    (2, 'test@test.com',   '$2b$10$vdZd2gxlr599YvfJrBeiSOzpNF5vgWSkwQ2xkUG25WDW0o7FEfeUC', 'Testowy',   'user',  '2025-01-02T00:00:00Z'),
+    (3, 'kowalski@test.com',     '$2b$10$vdZd2gxlr599YvfJrBeiSOzpNF5vgWSkwQ2xkUG25WDW0o7FEfeUC', 'Jan Kowalski',     'user',  '2025-01-03T00:00:00Z'),
+    (4, 'nowak@test.com', '$2b$10$vdZd2gxlr599YvfJrBeiSOzpNF5vgWSkwQ2xkUG25WDW0o7FEfeUC', 'Anna Nowak', 'user',  '2025-01-04T00:00:00Z');
 SELECT setval('users_id_seq', (SELECT MAX(id) FROM users));
 
 INSERT INTO projects (id, name, description, status, color, created_by, created_at) VALUES
