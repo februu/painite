@@ -1,4 +1,3 @@
-// mongosh init script — runs once on first container start as root in admin db
 const db = db.getSiblingDB(process.env.MONGO_INITDB_DATABASE || 'painite');
 
 // ─── Indexes ──────────────────────────────────────────────────────────────────
@@ -6,7 +5,6 @@ const db = db.getSiblingDB(process.env.MONGO_INITDB_DATABASE || 'painite');
 db.users.createIndex({ email: 1 }, { unique: true });
 db.users.createIndex({ username: 1 });
 
-// TTL index: MongoDB auto-expires sessions — replaces manual cleanup
 db.sessions.createIndex({ expires_at: 1 }, { expireAfterSeconds: 0 });
 db.sessions.createIndex({ user_id: 1 });
 
@@ -63,9 +61,6 @@ db.users.insertMany([
 		created_at: new Date('2025-01-04T00:00:00Z')
 	}
 ]);
-
-// Statuses and priorities are embedded in the project document.
-// Each subdocument carries its own _id so tasks can reference them.
 
 const s1 = new ObjectId();
 const s2 = new ObjectId();
