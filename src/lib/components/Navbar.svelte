@@ -46,7 +46,7 @@
 
 <div class="navbar z-50 justify-between bg-base-100 px-4 shadow-sm">
 	<div>
-		<div class="ml-4 text-xl font-semibold">PurePain</div>
+		<div class="ml-4 text-xl font-semibold">Painite</div>
 	</div>
 
 	<div class="relative">

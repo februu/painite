@@ -11,7 +11,7 @@
 	<div class="card w-full max-w-sm bg-base-100 shadow-xl">
 		<div class="card-body gap-4">
 			<div class="text-center">
-				<h1 class="text-2xl font-bold">PurePain</h1>
+				<h1 class="text-2xl font-bold">Painite</h1>
 				<p class="text-base-content/60 mt-1 text-sm">Sign in to your account</p>
 			</div>
 
